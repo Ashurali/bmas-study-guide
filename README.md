@@ -8,9 +8,11 @@ to GitHub Pages. `SITE_SPECIFICATION.md` governs everything here.
 
 > **⚠️ NO IMAGES RULE: never commit a slide image, page render, PDF or raster
 > image (png/jpg/gif/webp/bmp/tif/pdf/ppt/pptx).** The repo and the site are
-> public and the slide figures are copyrighted. Every figure is an original
-> SVG drawn in code. The pre-commit hook and the CI audit both reject these
-> file types.
+> public and the slide figures are copyrighted. Every diagram and animation is
+> an original SVG drawn in code. The pre-commit hook and the CI audit both
+> reject these file types. **Only exception:** AI-generated illustrations as
+> `docs/assets/ai/<name>.webp` (≤ 300 KB, text prompts only, never from a
+> slide) under spec §8.4.
 
 ## Local development
 

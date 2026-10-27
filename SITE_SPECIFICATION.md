@@ -17,7 +17,7 @@ Success = before or after a lecture I can play through that lesson on my phone i
 
 ## 2. Hard constraints — read first
 
-1. **MUST NOT commit any slide image, page render, PDF or raster image** (png/jpg/gif/webp/bmp/tif/pdf/ppt/pptx) — ever. The repo and the site are public (a GitHub Pages site is public unless its repo belongs to a GitHub Enterprise Cloud org), and most slide figures are copyrighted journal figures. Every figure on the site is an original SVG drawn in code; the only image file is an SVG logo.
+1. **MUST NOT commit any slide image, page render, PDF or raster image** (png/jpg/gif/webp/bmp/tif/pdf/ppt/pptx) — ever — **with one exception: AI-generated illustrations as `.webp` files in `docs/assets/ai/`**, under the rules of §8.4. The repo and the site are public (a GitHub Pages site is public unless its repo belongs to a GitHub Enterprise Cloud org), and most slide figures are copyrighted journal figures. Every diagram, mechanism and animation is an original SVG drawn in code; the AI illustrations are context pictures and quiz items only. *(Exception added 2026-10-27 at the owner's request.)*
 2. **MUST NOT trace slide figures.** Understand the mechanism from the slide, then draw it in this site's own visual language (§8.3) and layout. Short technical phrases from slides are fine; don't paste slide text.
 3. **Nothing private or administrative on the site:** no emails, phone extensions, rooms, grading details, my midterm article, or anything about my Final Champion team or approach (other teams can read a public site).
 4. **Git:** commit at the end of each phase and each lesson with a plain message. **Never push.** No AI/Claude attribution or Co-Authored-By lines anywhere. I create the GitHub repo and push myself.
@@ -65,7 +65,7 @@ bmas-study-guide/
 ├── scripts/build_glossary.py
 └── docs/
     ├── index.md                   # home
-    ├── assets/                    # extra.css, logo.svg, javascripts/
+    ├── assets/                    # extra.css, logo.svg, javascripts/, ai/ (§8.4 webp only)
     ├── shared/biosensor-anatomy.html
     ├── lessons/
     │   └── l04-immobilization/
@@ -142,7 +142,7 @@ One sentence: what this lesson adds to the biosensor.
 ## 8. Animation rules **(MUST)**
 
 ### 8.1 Build
-- One self-contained HTML file per animation (inline SVG/CSS/JS), like ssd-deep-dive's. The only external request allowed is Google Fonts. No localStorage, no other network calls.
+- One self-contained HTML file per animation (inline SVG/CSS/JS), like ssd-deep-dive's. The only external request allowed is Google Fonts (and, for `quiz.html` only, its §8.4 images from `docs/assets/ai/`). No localStorage, no other network calls.
 - ssd-deep-dive's design tokens: bg `#0b1020`, panel `#111832`, line `#26304d`, cyan `#4dd0c4`, amber `#f2b13c`, violet `#a78bfa`, red `#ef6a6a`, text `#e8eeff`, dim `#8ea0c9`; Space Grotesk / IBM Plex Sans / IBM Plex Mono.
 - **Mobile first:** designed at 360 px wide; no horizontal scroll; SVG `viewBox` + `width:100%`; tap targets ≥ 40 px; nothing hover-only.
 - Processes get ▶ play / ⏸ pause / step ▸ / ↺ reset. Trade-offs get sliders with a live readout. A family of related reactions shares one file with tabs.
@@ -166,6 +166,14 @@ Animate **mechanisms, not slides**: several slides showing stages of one process
 - Dashed line = weak/non-covalent. Solid line = covalent.
 - Colour roles: recognizer cyan, interface amber, transducer violet, signal/failure red. Inside a lesson each method gets one colour and keeps it.
 - Chemistry: draw only the reacting groups as simplified structural formulas; the rest of the molecule is a blob. Which groups react, which bond forms and what leaves must be correct. Label simplifications ("not to scale").
+
+### 8.4 AI-generated illustrations **(MUST)**
+- **Uses — only these two:** (a) *context pictures* where a slide shows a photo, device, organism or lab scene (the "R" rows of the audit); (b) *quiz items* in a second visual style, so I practise recognising a concept in a drawing that isn't this site's. Never for a mechanism, reaction, curve or anything an animation should show, and never inside an animation file.
+- **Source:** text prompts only, generated through my ChatGPT sign-in with the Codex CLI (`codex exec` and its built-in `image_gen` tool — no API key), driven by a local script outside the repo. Prompts live in `plans/lNN-images.json`. Never upload or describe a slide figure to the generator; "redraw p.37" is tracing (§2.2).
+- **Content:** no text or labels inside the image, no logos or brand names, no real people's likenesses.
+- **Check before commit:** look at every image against the slides; regenerate or drop it if anything is scientifically wrong. Raw outputs stay outside the repo in `_ai_images/LNN/` in the course folder; only approved files are copied into `docs/assets/ai/`.
+- **Files:** `docs/assets/ai/lNN-<what>.webp`, flat folder, lowercase, ≤ 1200 px wide, ≤ 300 KB each (size enforced by the hook), at most ~10 per lesson.
+- **On the page:** a `<figure>` with alt text and the caption "AI-generated illustration — <what it shows>", placed after the section's bullets, never above the section's animation.
 
 ## 9. Content rules **(MUST)**
 - The slides are the source of truth. Anything not on them goes in `!!! note "Background (not on slides)"`, so I can tell what the lecturer actually covered.
@@ -211,13 +219,13 @@ Starting points from the course index; the audit decides. Tell me when something
 ## 13. Reference layer
 1. **Glossary** — adapt `build_glossary.py` to read the `## Key vocabulary` tables (`| Term | 中文 | Meaning |`) from `docs/lessons/*/index.md` and write one alphabetized table (Term | 中文 | Meaning | Lesson) to `docs/reference/glossary.md`, with the lesson cells linking back to each vocabulary section. It runs in CI before the build, as in ssd-deep-dive.
 2. **Cheat sheet** — hand-written: the numbers, formulas and must-know facts from each lesson (e.g. α/β/γ-cyclodextrin = 6/7/8 glucose units), each linked to its section. KaTeX for formulas.
-3. **Quizzes** — each `anim/quiz.html` holds a plain JS array of `{q, options, answer, why, slide}` (plus optional inline SVG), shows one question at a time, gives the explanation and slide pointer right after each answer, shows the score at the end, and can retry only the missed ones. `reference/quizzes.md` links all of them.
+3. **Quizzes** — each `anim/quiz.html` holds a plain JS array of `{q, options, answer, why, slide}` (plus optional inline SVG, or an optional `img` path to a §8.4 illustration in `docs/assets/ai/`), shows one question at a time, gives the explanation and slide pointer right after each answer, shows the score at the end, and can retry only the missed ones. `reference/quizzes.md` links all of them.
 4. **Animations index** — `reference/animations.md`, grouped by lesson: title · one line · link to the lesson section · full-screen link.
 5. **Tags** — a small controlled list, added to only when needed: `recognizer`, `interface`, `transducer`, `enzyme`, `antibody`, `aptamer`, `dna`, `immobilization`, `optical`, `spr`, `electrochemical`, `fet`, `microfluidics`, `immunoassay`, `pcr`, `glucose`, `sequencing`.
 
 ## 14. Deployment
 - `deploy.yml` as in ssd-deep-dive: audit → glossary → `mkdocs build --strict` → deploy to Pages.
-- Audit: fail if any tracked file matches `\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$`. The same check runs in `.githooks/pre-commit` on staged files; activate it with `git config core.hooksPath .githooks` in Phase 0. The hook is the one that matters: once pushed, a file is public in the repo history even if the deploy fails.
+- Audit: fail if any tracked file matches `\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$`, except `docs/assets/ai/<name>.webp` (§8.4). The same check runs in `.githooks/pre-commit` on staged files, which also rejects any `docs/assets/ai/` file over 300 KB; activate it with `git config core.hooksPath .githooks` in Phase 0. The hook is the one that matters: once pushed, a file is public in the repo history even if the deploy fails.
 - README: local dev (`python -m venv .venv`, `pip install -r requirements.txt`, `mkdocs serve`); the per-lesson procedure in a few lines; the no-images rule in bold; my one-time steps (create the public repo `Ashurali/bmas-study-guide`, add the remote, push, Settings → Pages → Source: GitHub Actions).
 
 ## 15. Phases (commit after each)
@@ -228,7 +236,8 @@ Starting points from the course index; the audit decides. Tell me when something
 4. **Every next lesson** = one run of §10 and one commit, with no stop after the plan unless I ask. Order: the next upcoming lecture first — L05 (lecture 10-06), L06 (10-20), L07 (10-27), L08 + L09 (11-03) — then the past ones, L03 → L02 → L01.
 
 ## 16. Acceptance checklist (every lesson)
-- [ ] `git ls-files` contains no raster image, PDF or slide file; hook and CI audit in place.
+- [ ] `git ls-files` contains no raster image, PDF or slide file outside `docs/assets/ai/`; hook and CI audit in place.
+- [ ] Every AI illustration follows §8.4: text-prompt only, checked against the slides, no text in the image, captioned "AI-generated illustration", ≤ 300 KB.
 - [ ] `mkdocs build --strict` passes.
 - [ ] Every concept section starts with an expanded, working animation; prose within the §7 budget.
 - [ ] Every animation opened in a real browser at 360 px and desktop width: no console errors, no horizontal scroll, controls work by touch, reduced-motion mode works. (ssd-deep-dive's `.claude/launch.json` shows the `mkdocs serve` preview config. If you have no browser tool, say so and I'll check.)

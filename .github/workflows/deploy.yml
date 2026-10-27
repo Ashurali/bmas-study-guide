@@ -22,9 +22,9 @@ jobs:
         with:
           fetch-depth: 0 # full history for git-revision-date-localized
 
-      - name: Audit — no images, PDFs or slide files tracked
+      - name: Audit — no images, PDFs or slide files tracked (except docs/assets/ai/*.webp)
         run: |
-          bad=$(git ls-files | grep -iE '\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$' || true)
+          bad=$(git ls-files | grep -iE '\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$' | grep -vE '^docs/assets/ai/[^/]+\.webp$' || true)
           if [ -n "$bad" ]; then
             echo "::error::Image, PDF or slide file tracked by git:"
             echo "$bad"

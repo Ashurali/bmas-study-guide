@@ -1,10 +1,22 @@
 #!/bin/sh
 # Refuse to commit raster images, PDFs or slide files (SITE_SPECIFICATION.md §2.1, §14).
+# Only exception: AI illustrations as docs/assets/ai/<name>.webp, each ≤ 300 KB (§8.4).
 # Activate once per clone: git config core.hooksPath .githooks
-bad=$(git diff --cached --name-only --diff-filter=ACMR | grep -iE '\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$')
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+bad=$(echo "$staged" | grep -iE '\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$' | grep -vE '^docs/assets/ai/[^/]+\.webp$')
 if [ -n "$bad" ]; then
   echo "pre-commit: images, PDFs and slide files must never be committed:" >&2
   echo "$bad" >&2
+  echo "(only docs/assets/ai/<name>.webp is allowed)" >&2
   echo "Unstage them with: git restore --staged <file>" >&2
   exit 1
 fi
+
+for f in $(echo "$staged" | grep -E '^docs/assets/ai/'); do
+  size=$(git cat-file -s ":$f")
+  if [ "$size" -gt 307200 ]; then
+    echo "pre-commit: $f is $size bytes; AI illustrations must be ≤ 300 KB." >&2
+    exit 1
+  fi
+done
