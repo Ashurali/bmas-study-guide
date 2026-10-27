@@ -1,0 +1,2 @@
+# Keep the hook LF so sh can run it after a Windows checkout (core.autocrlf)
+.githooks/* text eol=lf
