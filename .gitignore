@@ -5,7 +5,7 @@ site/
 .venv/
 __pycache__/
 
-# Local preview config (absolute paths to this machine)
+# Local Claude Code settings, if a session is ever started inside the repo
 .claude/
 
 # OS noise
