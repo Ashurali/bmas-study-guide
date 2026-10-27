@@ -183,6 +183,33 @@ PCR · DNA polymerase · primer · dNTP · template · denaturation · annealing
 
 ## 7. Open questions for the owner
 
-1. **ChatGPT-made figures.** The spec's MUSTs say no raster images at all (§2.1; the hook blocks png/jpg/webp) and no tracing of slide figures (§2.2). An image generated from a slide figure could count as a derivative. Keep SVG-only, or change §2.1?
-2. **§13 Beyond classic PCR.** qPCR, LAMP, RPA and iiPCR are title-only in the PDF (their content was videos). Build `beyond-pcr.html` as a Background-only section (planned), or reduce it to one pointer line?
-3. **Spec text.** The spec still says L04 is the pilot (§11, §15). Leave the spec as is, with this plan as the record (planned), or edit §15's order?
+1. **§13 Beyond classic PCR.** qPCR, LAMP, RPA and iiPCR are title-only in the PDF (their content was videos). Build `beyond-pcr.html` as a Background-only section (planned), or reduce it to one pointer line?
+2. **Spec text.** The spec still says L04 is the pilot (§11, §15). Leave the spec as is, with this plan as the record (planned), or edit §15's order?
+3. **Pseudo-text in images.** `l07-water-baths-1` has tiny, unreadable pseudo-lettering on the bath dials. Accept it (it can't be read at phone size), or regenerate until it's gone?
+
+(Resolved 2026-10-27: AI illustrations are allowed under spec §8.4 — see §8 below.)
+
+## 8. AI illustrations (spec §8.4)
+
+**Workflow.** Prompts live in `plans/l07-images.json`: a shared style suffix per kind (`context` = documentary photo; `quiz` = flat white-background textbook diagram), and per image an id, section, slide pointer and prompt. A local script outside the repo (`gen_images.py` in the session scratchpad; if it's lost, rebuild it from this description):
+
+1. `generate <repo> l07 [--only ID…] [--force]` sends each prompt to `codex exec --skip-git-repo-check --ephemeral -s read-only --json -`, with the prompt on stdin. The instruction says: use the built-in `image_gen` tool once, run no shell commands, reply DONE. Codex saves the PNG under `~/.codex/generated_images/<thread_id>/`; the script reads `thread_id` from the JSON events and copies the PNG to `_ai_images/L07/<id>-<n>.png` in the course folder (outside the repo). Uses the owner's ChatGPT sign-in, no API key, ~43k Codex input tokens per image.
+2. I look at every raw image against the slides and the §8.4 content rules, then regenerate or drop.
+3. `webp <repo> <raw.png> <id>` shrinks an approved image to `docs/assets/ai/<id>.webp`: ≤ 1200 px wide, highest WebP quality that fits in 300 KB. Uses Pillow, installed in `.venv` only and kept out of `requirements.txt` because CI doesn't need it.
+
+**L07 list** (7 context + 3 quiz = 10, the §8.4 cap):
+
+| id | Kind | Goes in | Slides | Status |
+|---|---|---|---|---|
+| `l07-hot-spring` | context | §3 Taq vs Pfu (hot springs, *T. aquaticus*) | p.14 | generated, checked OK — 1200×800 WebP = 182 KB |
+| `l07-water-baths` | context | §5 Water-bath PCR | pp. 26–28 | generated; tiny pseudo-text on dials (open question 3) |
+| `l07-thermocycler` | context | §6 Thermocyclers | pp. 30, 34 | to generate |
+| `l07-flow-chip` | context | §8 Continuous-flow chip | pp. 37–39 | to generate |
+| `l07-micropcr` | context | §9 microPCR | p.42 | to generate |
+| `l07-droplets` | context | §10 Microdroplet PCR | pp. 44–47 | to generate |
+| `l07-rotary` | context | §11 Rotary PCR | pp. 50–51 | to generate |
+| `l07-quiz-anneal` | quiz | alternative drawing for quiz Q1 (which step?) | pp. 9, 13 | to generate |
+| `l07-quiz-flow-chip` | quiz | quiz Q13 (which system?) | pp. 37–38 | to generate |
+| `l07-quiz-emulsion` | quiz | quiz Q15 (which technique?) | pp. 45–46 | to generate |
+
+Quiz questions that use an AI image are extra to the ≥ 4 questions that use this site's own SVG drawings (spec §16). Each context image is a `<figure>` after its section's bullets, captioned "AI-generated illustration — <what it shows>" (spec §8.4).

@@ -1,0 +1,79 @@
+{
+  "lesson": "L07",
+  "styles": {
+    "context": "Style: natural documentary photograph, realistic lighting, landscape 3:2 composition. Avoid: any text, letters, numbers, labels, captions, logos, brand names, watermarks, recognizable real people.",
+    "quiz": "Style: simple flat textbook diagram on a plain white background, clean dark outlines, soft muted colours, landscape 4:3 composition. Avoid: any text, letters, numbers, labels, logos, watermarks, people."
+  },
+  "images": [
+    {
+      "id": "l07-hot-spring",
+      "section": "3 The polymerase: Taq vs Pfu",
+      "slides": "p.14",
+      "style": "context",
+      "prompt": "A steaming geothermal hot spring in a volcanic landscape at dawn, a deep blue pool ringed by vivid orange and yellow microbial mats, wisps of steam."
+    },
+    {
+      "id": "l07-water-baths",
+      "section": "5 Water-bath PCR",
+      "slides": "pp. 26-28",
+      "style": "context",
+      "prompt": "A 1980s molecular biology lab bench with three stainless-steel laboratory water baths side by side, each giving off a little steam, a gloved hand moving a small plastic test tube from one bath to the next, a wall clock in the background, warm fluorescent light."
+    },
+    {
+      "id": "l07-thermocycler",
+      "section": "6 Thermocyclers",
+      "slides": "pp. 30, 34",
+      "style": "context",
+      "prompt": "A modern benchtop PCR thermal cycler on a clean lab bench with its heated lid open, showing a metal block with a grid of wells holding small thin-walled plastic tubes, shallow depth of field."
+    },
+    {
+      "id": "l07-flow-chip",
+      "section": "8 PCR on a chip: continuous flow",
+      "slides": "pp. 37-39",
+      "style": "context",
+      "prompt": "Macro photograph of a small rectangular glass microfluidic chip with one long channel winding back and forth, filled with pale liquid, resting across three parallel metal heating bars, thin plastic tubing attached at the inlet and the outlet, on a lab bench."
+    },
+    {
+      "id": "l07-micropcr",
+      "section": "9 microPCR",
+      "slides": "p.42",
+      "style": "context",
+      "prompt": "Macro photograph of a silicon microchip mounted on a green circuit board, with four tiny liquid droplets sitting on the chip surface, each covered by a clear oil cap, fine metal traces around them, soft studio light."
+    },
+    {
+      "id": "l07-droplets",
+      "section": "10 Microdroplet PCR",
+      "slides": "pp. 44-47",
+      "style": "context",
+      "prompt": "Fluorescence microscope view of a microfluidic channel in which hundreds of identical tiny water droplets flow in oil, packed in a neat line; a few droplets glow bright green while the rest stay dark; dark background."
+    },
+    {
+      "id": "l07-rotary",
+      "section": "11 Rotary PCR",
+      "slides": "pp. 50-51",
+      "style": "context",
+      "prompt": "A round white rotary stage on a lab bench with three small copper-coloured heating blocks spaced evenly around its rim and a narrow glass microchip strip mounted on a central motor shaft above them, wires leading to a small motor underneath."
+    },
+    {
+      "id": "l07-quiz-anneal",
+      "section": "quiz: which PCR step?",
+      "slides": "pp. 9, 13",
+      "style": "quiz",
+      "prompt": "Two long single DNA strands drawn as horizontal ladder halves, one above the other with a clear gap between them; one short single-stranded piece is paired to the top strand near its right end, and another short piece is paired to the bottom strand near its left end; nothing else."
+    },
+    {
+      "id": "l07-quiz-flow-chip",
+      "section": "quiz: which PCR system?",
+      "slides": "pp. 37-38",
+      "style": "quiz",
+      "prompt": "Top view of a rectangular chip crossed by three horizontal coloured bands, red at the top, orange in the middle and blue at the bottom; a single thin channel winds up and down across all three bands many times, from an inlet circle on the left to an outlet circle on the right."
+    },
+    {
+      "id": "l07-quiz-emulsion",
+      "section": "quiz: which technique?",
+      "slides": "pp. 45-46",
+      "style": "quiz",
+      "prompt": "Many small round water droplets floating in oil; several droplets each contain one small grey bead; in a few droplets the bead is covered with many short identical strands sticking out all around it like a sea urchin; most droplets are empty."
+    }
+  ]
+}
