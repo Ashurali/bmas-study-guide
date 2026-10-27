@@ -1,0 +1,100 @@
+# BMAS Study Guide — MkDocs configuration (see SITE_SPECIFICATION.md)
+site_name: BMAS Study Guide
+site_description: >-
+  An animation-first study guide for NYCU Biomedical Micro Analysis Systems
+  (生物微型檢測技術) — biosensors and micro total analysis systems, one
+  interactive diagram per concept.
+site_url: https://ashurali.github.io/bmas-study-guide/
+
+# Broken section anchors (glossary/cheat-sheet/quiz links) fail the strict build
+validation:
+  links:
+    anchors: warn
+
+theme:
+  name: material
+  custom_dir: overrides
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  # Follows the OS theme on first visit; the toggle stores a manual override
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  font:
+    text: IBM Plex Sans
+    code: IBM Plex Mono
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.footer # prev/next links at the bottom of every page
+    - toc.follow
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+plugins:
+  - search:
+      lang:
+        - en
+        - zh
+      # jieba segments CJK with zero-width spaces (U+200B) at build time;
+      # the client must split tokens on them for 聚合酶-style queries
+      separator: '[\s​\-]+'
+  - tags
+  - git-revision-date-localized:
+      type: date
+      fallback_to_build_date: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  # KaTeX. Inline math is \( ... \) only — single-$ is disabled so prices
+  # ("$33B/yr") never turn into math.
+  - pymdownx.arithmatex:
+      generic: true
+      inline_syntax: ['round']
+      block_syntax: ['square', 'dollar']
+
+extra_css:
+  - https://unpkg.com/katex@0.16.11/dist/katex.min.css
+  - assets/extra.css
+
+extra_javascript:
+  - assets/javascripts/katex.js
+  - assets/javascripts/iframe-resize.js
+  - https://unpkg.com/katex@0.16.11/dist/katex.min.js
+  - https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js
+
+nav:
+  - Home: index.md
+  - Lessons:
+      - lessons/index.md
+  - Animations: reference/animations.md
+  - Reference:
+      - reference/glossary.md
+      - reference/cheat-sheet.md
+      - reference/quizzes.md
+      - reference/tags.md

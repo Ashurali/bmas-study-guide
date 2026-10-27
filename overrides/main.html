@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+
+{# The site is public but unlisted: the URL works, search engines skip it. #}
+{% block extrahead %}
+  <meta name="robots" content="noindex">
+{% endblock %}

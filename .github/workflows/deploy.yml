@@ -1,0 +1,59 @@
+name: Build & deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for git-revision-date-localized
+
+      - name: Audit — no images, PDFs or slide files tracked
+        run: |
+          bad=$(git ls-files | grep -iE '\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Image, PDF or slide file tracked by git:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Generate glossary
+        run: python scripts/build_glossary.py
+
+      - name: Build site (strict — broken links fail CI)
+        run: mkdocs build --strict
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

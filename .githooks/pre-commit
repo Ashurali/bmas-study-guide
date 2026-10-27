@@ -1,0 +1,10 @@
+#!/bin/sh
+# Refuse to commit raster images, PDFs or slide files (SITE_SPECIFICATION.md §2.1, §14).
+# Activate once per clone: git config core.hooksPath .githooks
+bad=$(git diff --cached --name-only --diff-filter=ACMR | grep -iE '\.(png|jpe?g|gif|webp|bmp|tiff?|pdf|pptx?)$')
+if [ -n "$bad" ]; then
+  echo "pre-commit: images, PDFs and slide files must never be committed:" >&2
+  echo "$bad" >&2
+  echo "Unstage them with: git restore --staged <file>" >&2
+  exit 1
+fi
