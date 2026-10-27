@@ -16,7 +16,7 @@ match the week numbers, so each row shows both.
 | L05 | 5 | 10-06 | Micro-optical analytical systems | not yet |
 | — | 6 | 10-13 | Nano-crystal-based analytical systems | no slides yet |
 | L06 | 7 | 10-20 | Micro-immune analytical systems | not yet |
-| L07 | 8 | 10-27 | Micro-PCR analytical systems | not yet |
+| [L07](l07-pcr/index.md) | 8 | 10-27 | Micro-PCR analytical systems | ready |
 | L08 | 9 | 11-03 | Glucose biosensors | not yet |
 | L09 | 9 | 11-03 | Integrated µTAS: DNA sequencing | not yet |
 

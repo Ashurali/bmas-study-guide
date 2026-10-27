@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Microdroplet PCR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 13px "IBM Plex Mono",monospace;color:var(--dim)}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>Microdroplet PCR</h1>
+<div class="row tabs" role="tablist">
+  <button data-tab="split">Why split?</button>
+  <button data-tab="emul">Emulsion PCR</button>
+  <button data-tab="seq">Droplet sequencing</button>
+</div>
+<div class="panel">
+  <svg id="stage" viewBox="0 0 360 210" role="img" aria-label="Droplet diagram for the current step"></svg>
+  <div class="row" id="splitCtl" hidden aria-label="Number of droplets per sample">
+    <span class="note">Droplets per sample:</span>
+    <button data-n="1">1</button><button data-n="6">6</button><button data-n="24">24</button><button data-n="96">96</button>
+  </div>
+  <p class="cap" id="cap"></p>
+  <div class="row">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+    <span class="read" id="count"></span>
+  </div>
+</div>
+<p class="note" id="foot"></p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", water:"#3d5a99", grey:"#59627e"};
+
+// ---------- tab 1: why split? (p.44) ----------
+let nDrop = 96;
+const GRID = {1:[1, 1], 6:[2, 3], 24:[4, 6], 96:[8, 12]};
+const TARGETS = [[0.3, 0.27], [0.72, 0.68]];      // where sample B's two target molecules sit (fractions of the panel)
+function drawSplit(s, g) {
+  [["A", false, 10], ["B", true, 186]].forEach(([name, hasT, x0]) => {
+    const W = 164, H = 160, y0 = 30;
+    txt("sample " + name + (hasT ? " (2 targets)" : " (none)"), {x:x0 + W / 2, y:20, "font-size":11, fill:C.tx, "text-anchor":"middle"}, g);
+    const [cols, rows] = GRID[nDrop], cw = W / cols, ch = H / rows;
+    const pos = hasT ? TARGETS.map(([fx, fy]) => [Math.floor(fx * cols), Math.floor(fy * rows)]) : [];
+    if (nDrop === 1) {
+      // one big volume: the targets are a speck in it, before and after PCR
+      el("rect", {x:x0, y:y0, width:W, height:H, rx:10, fill:C.water, opacity:.55}, g);
+      if (s === 0) for (const [fx, fy] of hasT ? TARGETS : []) el("circle", {cx:x0 + fx * W, cy:y0 + fy * H, r:3, fill:C.red}, g);
+      return;
+    }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const cx = x0 + (c + 0.5) * cw, cy = y0 + (r + 0.5) * ch, rad = Math.min(cw, ch) / 2 - 1;
+      const lit = pos.some(([pc, pr]) => pc === c && pr === r);
+      el("circle", {cx, cy, r:rad, fill:C.water, opacity:.55}, g);
+      if (lit && s === 0) el("circle", {cx, cy, r:3, fill:C.red}, g);
+      // after PCR: the smaller the droplet, the bigger the target's share of its signal
+      if (lit && s === 1) el("circle", {cx, cy, r:rad, fill:C.red, opacity:Math.max(0.08, nDrop / 96)}, g);
+    }
+  });
+  const shareTxt = nDrop === 1 ? "one big volume" : `${nDrop} droplets`;
+  $("cap").textContent = s === 0
+    ? `Two samples that look the same; B hides 2 target molecules (red) among lots of other DNA. Split into ${shareTxt}.`
+    : nDrop === 1 ? "After PCR in one big volume, B's tiny signal is lost in the rest: A and B look alike."
+    : nDrop < 96 ? `After PCR: the droplets holding a target glow, but each droplet still has lots of other DNA, so the glow is weak. Try more droplets.`
+    : "After PCR in 96 droplets: exactly 2 droplets in B glow brightly. Count them: B had 2 target molecules.";
+  document.querySelectorAll("[data-n]").forEach(b => b.classList.toggle("on", +b.dataset.n === nDrop));
+}
+
+// ---------- tab 2: emulsion PCR on beads (pp. 45–46) ----------
+function bead(g, x, y, kind, s) {
+  // kind: 0 = no template, 1 = template A, 2 = template B
+  const col = kind === 1 ? C.cyan : kind === 2 ? C.violet : C.grey;
+  if (s >= 2 && kind) for (let k = 0; k < 12; k++) {
+    const a = k * Math.PI / 6;
+    el("line", {x1:x + 6 * Math.cos(a), y1:y + 6 * Math.sin(a), x2:x + 13 * Math.cos(a), y2:y + 13 * Math.sin(a), stroke:C.amber, "stroke-width":2}, g);
+  }
+  if (s < 2) for (let k = 0; k < 6; k++) {
+    const a = k * Math.PI / 3;
+    el("line", {x1:x + 6 * Math.cos(a), y1:y + 6 * Math.sin(a), x2:x + 9 * Math.cos(a), y2:y + 9 * Math.sin(a), stroke:C.violet, "stroke-width":1.5}, g);
+  }
+  el("circle", {cx:x, cy:y, r:6, fill:s >= 3 && kind ? col : C.grey, stroke:s >= 3 && kind ? "#fff" : "none"}, g);
+}
+const DROPS = [[40, 70, 1], [100, 60, 0], [160, 74, 2], [220, 62, 0], [280, 72, 1], [70, 140, 0], [130, 150, 2], [190, 138, 0], [250, 152, 1], [310, 140, -1]];
+function drawEmul(s, g) {
+  if (s === 0) {
+    // flow-focusing junction: oil from top and bottom pinches the water stream into droplets
+    el("rect", {x:20, y:94, width:120, height:22, fill:C.water, opacity:.6}, g);
+    el("rect", {x:140, y:30, width:24, height:150, fill:"#5c4b2a", opacity:.5}, g);
+    el("rect", {x:140, y:94, width:200, height:22, fill:"#5c4b2a", opacity:.5}, g);
+    txt("water mix →", {x:24, y:88, "font-size":10, fill:C.dim}, g);
+    txt("oil ↓", {x:168, y:44, "font-size":10, fill:C.dim}, g);
+    txt("oil ↑", {x:168, y:176, "font-size":10, fill:C.dim}, g);
+    for (let k = 0; k < 6; k++) {
+      const cx = 180 + k * 28;
+      el("circle", {cx, cy:105, r:9, fill:C.water}, g);
+      el("circle", {cx, cy:105, r:11, fill:"none", stroke:C.dim, "stroke-dasharray":"1.5 2"}, g);
+    }
+    txt("surfactant coat", {x:250, y:136, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  } else if (s <= 3) {
+    for (const [x, y, kind] of DROPS) {
+      el("circle", {cx:x, cy:y, r:24, fill:C.water, opacity:.45}, g);
+      if (kind >= 0) bead(g, x, y, kind, s);
+      if (s === 1 && kind > 0) el("line", {x1:x + 10, y1:y + 12, x2:x + 20, y2:y + 6, stroke:kind === 1 ? C.cyan : C.violet, "stroke-width":3, "stroke-linecap":"round"}, g);
+    }
+    if (s === 1) txt("bead + primer 1 · template A (cyan) or B (violet)", {x:180, y:200, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+    if (s === 3) txt("probe A glows cyan · probe B glows violet", {x:180, y:200, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  } else {
+    // flow-cytometry dot plot
+    el("line", {x1:60, y1:180, x2:330, y2:180, stroke:C.dim}, g);
+    el("line", {x1:60, y1:180, x2:60, y2:20, stroke:C.dim}, g);
+    txt("probe A signal (FL1) →", {x:330, y:198, "font-size":9, fill:C.dim, "text-anchor":"end"}, g);
+    txt("probe B (FL2) →", {x:52, y:100, "font-size":9, fill:C.dim, "text-anchor":"middle", transform:"rotate(-90 52 100)"}, g);
+    const cluster = (cx, cy, col, n) => { for (let k = 0; k < n; k++) el("circle", {cx:cx + 18 * Math.cos(k * 2.4) * ((k % 5) / 5), cy:cy + 14 * Math.sin(k * 2.4) * ((k % 4) / 4), r:3, fill:col, opacity:.85}, g); };
+    cluster(100, 150, C.grey, 30); cluster(260, 150, C.cyan, 22); cluster(110, 50, C.violet, 22);
+    txt("empty beads", {x:100, y:126, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+    txt("sequence A", {x:260, y:126, "font-size":9, fill:C.cyan, "text-anchor":"middle"}, g);
+    txt("sequence B", {x:150, y:46, "font-size":9, fill:C.violet}, g);
+  }
+}
+const EMUL = [
+  "Oil pinches the water-based mix into droplets; a surfactant coat (Rf-COOH on p.45) stops them merging.",
+  "Beads carrying primer 1 (biotin on streptavidin beads) and templates go in. Most droplets get no template or just one.",
+  "PCR in every droplet: a bead that shares a droplet with one template gets covered in copies of that template only.",
+  "Break the emulsion and add fluorescent probes: probe A sticks to sequence A beads, probe B to sequence B beads.",
+  "Flow cytometry reads the beads one by one: each bead lands in one cluster of the dot plot."
+];
+
+// ---------- tab 3: droplet sequencing (p.47) ----------
+const SEQ = "GATTACAG", BASECOL = {A:C.amber, C:C.cyan, G:C.violet, T:C.red};
+function drawSeq(s, g) {
+  // the captured DNA molecule at the left, shrinking as nucleotides are released
+  const left = s >= 1 ? 3 : 8;
+  for (let k = 0; k < left; k++) {
+    const x = 20 + k * 10;
+    el("rect", {x, y:92, width:7, height:10, fill:BASECOL[SEQ[SEQ.length - 1 - k]] || C.dim}, g);
+    el("rect", {x, y:104, width:7, height:10, fill:C.dim, opacity:.6}, g);
+  }
+  txt("single DNA molecule", {x:20, y:84, "font-size":9, fill:C.dim}, g);
+  el("rect", {x:110, y:94, width:60, height:18, fill:C.water, opacity:.35}, g);
+  el("rect", {x:170, y:40, width:20, height:126, fill:"#5c4b2a", opacity:.45}, g);
+  txt("oil", {x:194, y:52, "font-size":9, fill:C.dim}, g);
+  if (s >= 1) for (let k = 0; k < 4; k++) el("circle", {cx:120 + k * 13, cy:103, r:3, fill:s >= 2 ? C.dim : BASECOL[SEQ[k]]}, g);
+  // row of droplets leaving the junction, in order
+  const n = s >= 2 ? SEQ.length : 0;
+  for (let k = 0; k < n; k++) {
+    const cx = 204 + k * 19, cy = 103;
+    el("circle", {cx, cy, r:8, fill:s >= 3 ? BASECOL[SEQ[k]] : C.water, opacity:s >= 3 ? .95 : .6}, g);
+    if (s === 2) el("circle", {cx, cy, r:2, fill:C.tx}, g);
+    if (s === 4) txt(SEQ[k], {x:cx, y:132, "font-size":12, fill:BASECOL[SEQ[k]], "text-anchor":"middle"}, g);
+  }
+  if (s === 4) txt("read: " + SEQ, {x:280, y:160, "font-size":12, fill:C.tx, "text-anchor":"middle"}, g);
+}
+const SEQCAP = [
+  "A single double-stranded DNA molecule is caught in a micron-sized channel.",
+  "Pyrophosphorolysis releases its nucleotides one at a time from the end.",
+  "Each released nucleotide is captured in its own droplet, in order.",
+  "Inside each droplet a cascade reaction makes a bright colour for that base.",
+  "The droplets keep their order, so reading the colours in turn gives the sequence."
+];
+
+const TABS = {
+  split: {n:2, draw:drawSplit, foot:"The p.44 slide shows this comparison with no text. Reading it as 'rare targets become countable' is the point of the figure; the term digital PCR is Background."},
+  emul: {n:5, draw:drawEmul, caps:EMUL, foot:"Droplet making from p.45 (Nature Biotechnology 2009); bead-based emulsion PCR and flow cytometry from pp. 45–46 (no citation printed for the bead figures). Not to scale."},
+  seq: {n:5, draw:drawSeq, caps:SEQCAP, foot:"Steps from L07 p.47 (no citation on the slide). Base colours and the sequence are illustrative."}
+};
+let tab = "split", i = 0, timer = null;
+function render() {
+  const g = $("stage"); g.innerHTML = "";
+  TABS[tab].draw(i, g);
+  if (TABS[tab].caps) $("cap").textContent = TABS[tab].caps[i];
+  $("count").textContent = (i + 1) + " / " + TABS[tab].n;
+  $("splitCtl").hidden = tab !== "split";
+  $("foot").textContent = TABS[tab].foot;
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+}
+function next() { if (i < TABS[tab].n - 1) { i++; render(); } else pause(); }
+function play() { if (i === TABS[tab].n - 1) i = -1; timer = setInterval(next, 2200); $("play").textContent = "⏸ Pause"; next(); }
+function pause() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+$("play").onclick = () => timer ? pause() : play();
+$("step").onclick = () => { pause(); next(); };
+$("reset").onclick = () => { pause(); i = 0; render(); };
+document.querySelectorAll("[data-n]").forEach(b => b.onclick = () => { nDrop = +b.dataset.n; render(); });
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { pause(); tab = b.dataset.tab; i = 0; render(); });
+const want = new URLSearchParams(location.search).get("tab");
+if (TABS[want]) tab = want;
+if (RM) $("play").hidden = true;
+render();
+</script>
+</body>
+</html>

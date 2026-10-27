@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>DNA replication</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 13px "IBM Plex Mono",monospace;color:var(--dim)}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>DNA replication: one copy becomes two</h1>
+<div class="row tabs" role="tablist">
+  <button data-tab="copy">Copy</button>
+  <button data-tab="chem">Add a nucleotide</button>
+  <button data-tab="proof">Proofreading</button>
+</div>
+<div class="panel">
+  <svg id="stage" viewBox="0 0 360 200" role="img" aria-label="Replication diagram for the current step"></svg>
+  <p class="cap" id="cap"></p>
+  <div class="row">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+    <span class="read" id="count"></span>
+  </div>
+</div>
+<p class="note" id="foot"></p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", pol:"#6f86c0", green:"#7fd88f"};
+
+// straight strand with base ticks pointing toward its partner; bonds = dashed H-bonds
+function strand(g, xa, xb, y, color, dir, bonds) {
+  el("line", {x1:xa, y1:y, x2:xb, y2:y, stroke:color, "stroke-width":5, "stroke-linecap":"round"}, g);
+  for (let x = xa + 6; x < xb - 2; x += 12) {
+    el("line", {x1:x, y1:y, x2:x, y2:y + dir * 6, stroke:color, "stroke-width":2.5}, g);
+    if (bonds) el("line", {x1:x, y1:y + dir * 6, x2:x, y2:y + dir * 8, stroke:C.dim, "stroke-width":1, "stroke-dasharray":"1 1"}, g);
+  }
+}
+
+// ---------- tab 1: semi-conservative copy (p.5) ----------
+function drawCopy(s, g) {
+  if (s === 0) {
+    strand(g, 30, 330, 92, C.cyan, 1, true);
+    strand(g, 30, 330, 106, C.cyan, -1, false);
+    txt("parent double helix", {x:180, y:70, "font-size":11, fill:C.dim, "text-anchor":"middle"}, g);
+  } else if (s === 1) {
+    // fork half open: left half separated, right half still paired
+    const xf = 180;
+    strand(g, 30, xf, 50, C.cyan, 1, false);
+    strand(g, 30, xf, 148, C.cyan, -1, false);
+    el("path", {d:`M${xf} 50 L${xf + 24} 92`, stroke:C.cyan, "stroke-width":5, fill:"none", "stroke-linecap":"round"}, g);
+    el("path", {d:`M${xf} 148 L${xf + 24} 106`, stroke:C.cyan, "stroke-width":5, fill:"none", "stroke-linecap":"round"}, g);
+    strand(g, xf + 24, 330, 92, C.cyan, 1, true);
+    strand(g, xf + 24, 330, 106, C.cyan, -1, false);
+    strand(g, 60, xf, 64, C.amber, -1, true);
+    strand(g, 30, xf - 30, 134, C.amber, 1, true);
+    txt("fork", {x:xf + 30, y:84, "font-size":10, fill:C.dim}, g);
+    txt("new", {x:20, y:70, "font-size":10, fill:C.amber}, g);
+  } else {
+    strand(g, 30, 330, 40, C.cyan, 1, true);
+    strand(g, 30, 330, 54, C.amber, -1, false);
+    strand(g, 30, 330, 138, C.amber, 1, true);
+    strand(g, 30, 330, 152, C.cyan, -1, false);
+    txt("copy 1: old + new", {x:180, y:24, "font-size":11, fill:C.dim, "text-anchor":"middle"}, g);
+    txt("copy 2: new + old", {x:180, y:176, "font-size":11, fill:C.dim, "text-anchor":"middle"}, g);
+    if (s === 3) {
+      // binary fission: one cell → two cells, each with one chromosome
+      const cell = (x, y, w) => el("ellipse", {cx:x, cy:y, rx:w, ry:12, fill:"none", stroke:C.green, "stroke-width":1.5}, g);
+      cell(70, 96, 26);
+      txt("→", {x:110, y:101, "font-size":14, fill:C.dim}, g);
+      cell(150, 96, 20); cell(196, 96, 20);
+      txt("cell divides", {x:240, y:100, "font-size":10, fill:C.green}, g);
+    }
+  }
+}
+const COPY = [
+  "A double helix: two complementary strands held together by weak base pairs (dashed).",
+  "The strands unzip at the fork. Each old strand (cyan) is a template for a new one (amber).",
+  "Two identical double helices. Each keeps one old strand and gains one new strand.",
+  "Each copy keeps one parent strand (semi-conservative). A cell copies its DNA this way before it divides (p.5)."
+];
+
+// ---------- tab 2: adding one nucleotide (p.7) ----------
+function sugar(g, x, y, color, show5) {
+  // five-membered ring (pentagon) with 5' carbon up-left and 3' carbon at lower right
+  const pts = [[0,-12],[12,-4],[8,10],[-8,10],[-12,-4]].map(([a, b]) => `${x + a},${y + b}`).join(" ");
+  el("polygon", {points:pts, fill:"none", stroke:color, "stroke-width":2}, g);
+  txt("3′", {x:x + 10, y:y + 22, "font-size":9, fill:C.dim}, g);
+  if (show5) txt("5′", {x:x - 4, y:y - 16, "font-size":9, fill:C.dim}, g);
+}
+function base(g, x, y, letter, color, pair) {
+  el("rect", {x:x - 9, y:y, width:18, height:26, rx:3, fill:"none", stroke:color, "stroke-width":2}, g);
+  txt(letter, {x:x, y:y + 18, "font-size":12, fill:color, "text-anchor":"middle"}, g);
+  if (pair) for (const dx of [-4, 0, 4]) el("line", {x1:x + dx, y1:y + 27, x2:x + dx, y2:y + 37, stroke:C.dim, "stroke-width":1.2, "stroke-dasharray":"2 2"}, g);
+}
+function phos(g, x, y, label, color) {
+  el("circle", {cx:x, cy:y, r:10, fill:"#111832", stroke:color, "stroke-width":2}, g);
+  txt("P", {x:x, y:y + 4, "font-size":11, fill:color, "text-anchor":"middle"}, g);
+  if (label) txt(label, {x:x + 13, y:y + 4, "font-size":10, fill:color}, g);
+}
+function drawChem(s, g) {
+  // template strand along the bottom (3' at left, 5' at right)
+  el("line", {x1:20, y1:186, x2:340, y2:186, stroke:C.cyan, "stroke-width":5, "stroke-linecap":"round"}, g);
+  txt("template 3′", {x:20, y:200, "font-size":9, fill:C.cyan}, g);
+  txt("5′", {x:332, y:200, "font-size":9, fill:C.cyan}, g);
+  const tb = [[60, "C"], [130, "T"], [230, "C"], [300, "A"]];
+  for (const [x, l] of tb) { el("line", {x1:x, y1:186, x2:x, y2:176, stroke:C.cyan, "stroke-width":2.5}, g); base(g, x, 150, l, C.cyan, false); }
+  // growing strand (amber): ...-sugar(130) with base A paired to T
+  el("line", {x1:20, y1:92, x2:88, y2:92, stroke:C.amber, "stroke-width":5, "stroke-linecap":"round"}, g);
+  el("line", {x1:60, y1:92, x2:60, y2:112, stroke:C.amber, "stroke-width":2.5}, g);
+  txt("growing strand", {x:20, y:80, "font-size":9, fill:C.amber}, g);
+  base(g, 60, 112, "G", C.amber, true);
+  phos(g, 98, 92, "", C.amber);
+  sugar(g, 130, 98, C.amber);
+  el("line", {x1:108, y1:92, x2:118, y2:94, stroke:C.amber, "stroke-width":2}, g);
+  base(g, 130, 112, "A", C.amber, true);
+
+  // incoming dNTP: sugar at 230 with base G paired to C; triphosphate going up from the 5' side
+  const inc = s >= 3 ? C.amber : C.violet;
+  sugar(g, 230, 98, inc, true);
+  base(g, 230, 112, "G", inc, true);
+  el("line", {x1:218, y1:90, x2:207, y2:78, stroke:inc, "stroke-width":2}, g);
+  txt("O", {x:215, y:82, "font-size":9, fill:C.dim}, g);
+  phos(g, 200, 70, "α", inc);
+  // beta + gamma phosphates (pyrophosphate) — move away once the bond forms
+  const pg = el("g", {transform:s >= 2 ? "translate(64,0)" : ""}, g);
+  el("line", {x1:200, y1:56, x2:200, y2:60, stroke:C.violet, "stroke-width":2}, pg);
+  phos(pg, 200, 46, "β", C.violet);
+  el("line", {x1:200, y1:32, x2:200, y2:36, stroke:C.violet, "stroke-width":2}, pg);
+  phos(pg, 200, 22, "γ", C.violet);
+  if (s >= 2) txt("PPᵢ leaves", {x:264, y:68, "font-size":10, fill:C.violet, "text-anchor":"middle"}, g);
+
+  // the 3'-OH of the growing strand
+  if (s < 2) {
+    txt("O–H", {x:146, y:128, "font-size":11, fill:C.red}, g);
+    el("line", {x1:140, y1:106, x2:150, y2:118, stroke:C.amber, "stroke-width":2}, g);
+  }
+  if (s === 1) {
+    el("path", {d:"M162 120 Q190 112 193 82", fill:"none", stroke:C.red, "stroke-width":2, "marker-end":"url(#ah)"}, g);
+    txt("attack", {x:178, y:108, "font-size":9, fill:C.red}, g);
+  }
+  if (s >= 2) {
+    // new phosphodiester bond: 3'-O of the old end to the alpha-P (solid = covalent)
+    el("path", {d:"M140 106 L156 106 L191 75", fill:"none", stroke:C.tx, "stroke-width":2.5}, g);
+    txt("O", {x:148, y:102, "font-size":9, fill:C.dim}, g);
+    txt("new bond", {x:166, y:110, "font-size":9, fill:C.tx}, g);
+  }
+  if (s === 3) {
+    txt("O–H", {x:246, y:128, "font-size":11, fill:C.red}, g);
+    el("line", {x1:240, y1:106, x2:250, y2:118, stroke:C.amber, "stroke-width":2}, g);
+    txt("next dNTP joins here →", {x:240, y:144, "font-size":9, fill:C.red}, g);
+  }
+}
+const CHEM = [
+  "The incoming dNTP (violet) pairs with the next template base: G with C. Base pairs are weak hydrogen bonds (dashed).",
+  "The 3′-OH at the end of the growing strand attacks the α-phosphate of the dNTP.",
+  "A phosphodiester bond forms between the 3′-O and the α-phosphate (solid = covalent). The β- and γ-phosphates leave as pyrophosphate (PPᵢ).",
+  "The new nucleotide now carries the free 3′-OH. So a strand only grows 5′→3′, one dNTP at a time."
+];
+
+// ---------- tab 3: proofreading (p.7) ----------
+function drawProof(s, g) {
+  el("ellipse", {cx:180, cy:96, rx:150, ry:78, fill:C.pol, opacity:.22, stroke:C.pol, "stroke-width":1.5}, g);
+  txt("DNA polymerase", {x:180, y:32, "font-size":11, fill:C.dim, "text-anchor":"middle"}, g);
+  el("circle", {cx:250, cy:92, r:24, fill:"none", stroke:C.amber, "stroke-dasharray":"3 3"}, g);
+  txt("polymerase site", {x:250, y:60, "font-size":9, fill:C.amber, "text-anchor":"middle"}, g);
+  el("circle", {cx:130, cy:148, r:24, fill:"none", stroke:C.red, "stroke-dasharray":"3 3"}, g);
+  txt("exonuclease site", {x:130, y:186, "font-size":9, fill:C.red, "text-anchor":"middle"}, g);
+  // template strand through the enzyme
+  strand(g, 20, 340, 112, C.cyan, -1, false);
+  txt("template", {x:22, y:130, "font-size":9, fill:C.cyan}, g);
+  // new strand: paired part from the left to x=220
+  if (s === 1 || s === 2) {
+    strand(g, 20, 170, 98, C.amber, 1, true);
+    el("path", {d:"M170 98 Q160 130 140 144", stroke:C.amber, "stroke-width":5, fill:"none", "stroke-linecap":"round"}, g);
+    if (s === 1) el("rect", {x:128, y:140, width:12, height:12, rx:2, fill:C.red}, g);
+    else {
+      el("rect", {x:70, y:166, width:12, height:12, rx:2, fill:C.red, opacity:.8}, g);
+      txt("cut off", {x:86, y:176, "font-size":9, fill:C.red}, g);
+    }
+  } else {
+    strand(g, 20, 238, 98, C.amber, 1, true);
+    if (s === 0) {
+      // wrong base: red, tilted, no H-bond
+      el("rect", {x:240, y:86, width:12, height:12, rx:2, fill:C.red, transform:"rotate(-25 246 92)"}, g);
+      txt("✗ mismatch", {x:262, y:84, "font-size":10, fill:C.red}, g);
+    } else {
+      el("rect", {x:240, y:92, width:12, height:6, rx:2, fill:C.amber}, g);
+      el("line", {x1:246, y1:100, x2:246, y2:106, stroke:C.dim, "stroke-dasharray":"1 1"}, g);
+      txt("✓ correct", {x:262, y:84, "font-size":10, fill:C.green}, g);
+    }
+  }
+}
+const PROOF = [
+  "The polymerase adds a wrong base (red) at the 3′ end. It doesn't pair with the template.",
+  "The mispaired end slips from the polymerase site into the exonuclease site.",
+  "The exonuclease cuts off the wrong nucleotide.",
+  "The strand goes back to the polymerase site and the correct base is added."
+];
+
+const TABS = {
+  copy: {n:4, draw:drawCopy, caps:COPY, foot:"Template strands cyan, new strands amber. Drawing not to scale. 📎 L07 p.5"},
+  chem: {n:4, draw:drawChem, caps:CHEM, foot:"Only the reacting groups are drawn; the rest of each nucleotide is simplified. Not to scale. 📎 L07 p.7"},
+  proof: {n:4, draw:drawProof, caps:PROOF, foot:"Pfu has this exonuclease (proofreading) activity; Taq doesn't (p.15 table). 📎 L07 p.7"}
+};
+
+let tab = "copy", i = 0, timer = null;
+function render() {
+  const g = $("stage");
+  g.innerHTML = '<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#ef6a6a"/></marker></defs>';
+  TABS[tab].draw(i, g);
+  $("cap").textContent = TABS[tab].caps[i];
+  $("count").textContent = (i + 1) + " / " + TABS[tab].n;
+  $("foot").textContent = TABS[tab].foot;
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+}
+function next() { if (i < TABS[tab].n - 1) { i++; render(); } else pause(); }
+function play() { if (i === TABS[tab].n - 1) i = -1; timer = setInterval(next, 2200); $("play").textContent = "⏸ Pause"; next(); }
+function pause() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+$("play").onclick = () => timer ? pause() : play();
+$("step").onclick = () => { pause(); next(); };
+$("reset").onclick = () => { pause(); i = 0; render(); };
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { pause(); tab = b.dataset.tab; i = 0; render(); });
+const want = new URLSearchParams(location.search).get("tab");
+if (TABS[want]) tab = want;
+if (RM) $("play").hidden = true;
+render();
+</script>
+</body>
+</html>

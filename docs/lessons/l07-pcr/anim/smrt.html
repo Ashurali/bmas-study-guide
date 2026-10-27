@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SMRT sequencing</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.read{font:600 15px "IBM Plex Mono",monospace;color:var(--tx);letter-spacing:.08em}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>PacBio SMRT: single molecule, real time</h1>
+<div class="panel">
+  <svg id="stage" viewBox="0 0 360 230" role="img" aria-label="A polymerase at the bottom of a well, and the fluorescence trace"></svg>
+  <p class="cap" id="cap"></p>
+  <p class="read" id="seq"></p>
+  <div class="row">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+  </div>
+</div>
+<p class="note">Set-up from L07 p.53. Background (not on slides): the well is a zero-mode waveguide, so only its very bottom is lit and free nucleotides above stay dark; each dye sits on the phosphate end of its nucleotide and leaves with the pyrophosphate, so the finished strand carries no labels. Sequence and pulse heights are illustrative.</p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", pol:"#6f86c0"};
+const BASECOL = {A:C.amber, C:C.cyan, G:C.violet, T:C.red};
+const NAME = {A:"amber", C:"cyan", G:"violet", T:"red"};
+const READ = "GCATTGACCTAG";
+const HEIGHT = [0.8, 0.6, 0.95, 0.7, 0.75, 0.55, 0.9, 0.65, 0.7, 0.85, 0.6, 0.8];
+const FREE = [[40, 30, "A"], [80, 50, "C"], [270, 34, "G"], [310, 58, "T"], [60, 76, "T"], [290, 82, "A"], [230, 20, "C"], [120, 18, "G"]];
+
+let k = 0, timer = null;   // k = number of bases built in so far
+function render() {
+  const g = $("stage"); g.innerHTML = "";
+  // metal film with one tiny well; light comes from below
+  el("rect", {x:10, y:40, width:150, height:76, fill:"#2a3150"}, g);
+  el("rect", {x:200, y:40, width:150, height:76, fill:"#2a3150"}, g);
+  el("rect", {x:10, y:116, width:340, height:8, fill:"#9fb3d9", opacity:.45}, g);
+  txt("glass", {x:346, y:134, "font-size":9, fill:C.dim, "text-anchor":"end"}, g);
+  el("path", {d:"M180 150 L180 128 M174 134 L180 126 L186 134", stroke:"#7fd88f", "stroke-width":2, fill:"none"}, g);
+  txt("light from below", {x:172, y:146, "font-size":9, fill:"#7fd88f", "text-anchor":"end"}, g);
+  // free labelled nucleotides above the well stay dark
+  for (const [x, y, b] of FREE) { el("circle", {cx:x, cy:y, r:3, fill:C.dim}, g); el("circle", {cx:x + 5, cy:y - 3, r:2.5, fill:BASECOL[b], opacity:.35}, g); }
+  // template strand coming down into the well, polymerase fixed at the bottom
+  el("path", {d:"M150 6 C150 40 172 60 176 106", fill:"none", stroke:C.cyan, "stroke-width":3}, g);
+  el("path", {d:"M176 106 C186 90 208 60 214 20", fill:"none", stroke:C.amber, "stroke-width":3, opacity:Math.min(1, 0.3 + k * 0.06)}, g);
+  el("path", {d:"M164 112 a16 12 0 1 1 32 0 Z", fill:C.pol}, g);
+  if (k > 0) {
+    const b = READ[k - 1];
+    el("circle", {cx:180, cy:104, r:16, fill:BASECOL[b], opacity:.35}, g);
+    el("circle", {cx:180, cy:104, r:6, fill:BASECOL[b]}, g);
+  }
+  // fluorescence trace
+  const y0 = 220, H = 60;
+  el("line", {x1:20, x2:350, y1:y0, y2:y0, stroke:C.line}, g);
+  txt("fluorescence vs time →", {x:350, y:y0 - H - 8, "font-size":9, fill:C.dim, "text-anchor":"end"}, g);
+  for (let j = 0; j < k; j++) {
+    const x = 26 + j * 27, h = HEIGHT[j] * H, b = READ[j];
+    el("path", {d:`M${x} ${y0} L${x + 3} ${y0 - h} L${x + 9} ${y0 - h * 0.85} L${x + 12} ${y0}`, fill:"none", stroke:BASECOL[b], "stroke-width":2}, g);
+    txt(b, {x:x + 6, y:y0 - h - 4, "font-size":11, fill:BASECOL[b], "text-anchor":"middle"}, g);
+  }
+  const b = READ[k - 1];
+  $("cap").textContent = k === 0 ? "One polymerase is fixed at the bottom of a tiny well, lit from below. Labelled nucleotides float above it."
+    : k === READ.length ? "Done: one molecule, read as it was copied. Each flash was one base."
+    : `${b} is being built in: while the polymerase holds it, its label flashes ${NAME[b]} and the trace records a pulse.`;
+  $("seq").textContent = "read: " + (READ.slice(0, k) || "…");
+}
+function next() { if (k < READ.length) { k++; render(); } else pause(); }
+function play() { if (k === READ.length) k = 0; timer = setInterval(next, 900); $("play").textContent = "⏸ Pause"; next(); }
+function pause() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+$("play").onclick = () => timer ? pause() : play();
+$("step").onclick = () => { pause(); next(); };
+$("reset").onclick = () => { pause(); k = 0; render(); };
+if (RM) $("play").hidden = true;
+render();
+</script>
+</body>
+</html>

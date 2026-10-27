@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Move the sample</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 13px "IBM Plex Mono",monospace;color:var(--amber);margin:4px 2px 0}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+label{font-size:13px;color:var(--dim);display:block;margin-top:6px}
+input[type=range]{width:100%;height:40px;accent-color:var(--cyan)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>Fixed temperature zones: the sample moves</h1>
+<div class="row tabs" role="tablist">
+  <button data-tab="bath">Water baths</button>
+  <button data-tab="flow">Flow chip</button>
+  <button data-tab="rotary">Rotary</button>
+</div>
+<div class="panel">
+  <svg id="dev" viewBox="0 0 360 200" role="img" aria-label="Device with fixed temperature zones"></svg>
+  <p class="cap" id="cap"></p>
+  <div class="row">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+    <button id="skip">Skip to end</button>
+  </div>
+  <div id="flowCtl" hidden>
+    <div class="row" aria-label="Collect product after this many cycles">
+      <span class="note">Outlet after</span>
+      <button data-n="20">20</button><button data-n="25">25</button><button data-n="30">30</button><button data-n="35">35</button><button data-n="40">40</button>
+      <span class="note">cycles</span>
+    </div>
+    <div class="row"><button id="multi">3 samples in a row</button></div>
+    <label for="speed">Time per loop (= per cycle): <span id="speedv"></span> s</label>
+    <input type="range" id="speed" min="3" max="60" value="12">
+  </div>
+  <div id="rotCtl" hidden>
+    <label for="dwell">Dwell on each block: <span id="dwellv"></span> s</label>
+    <input type="range" id="dwell" min="1" max="30" value="5">
+  </div>
+</div>
+<div class="panel">
+  <svg id="trace" viewBox="0 0 360 96" role="img" aria-label="Sample temperature over time"></svg>
+  <p class="read" id="read"></p>
+</div>
+<p class="note" id="foot"></p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", hot:"#ff8a5c", cool:"#6ea8ff", panel:"#111832"};
+const ZONE = {95:C.hot, 72:C.amber, 55:C.cool};
+const fmtMin = m => { const h = Math.floor(m / 60), mm = Math.round(m % 60); return h ? `${h} h ${String(mm).padStart(2, "0")} min` : `${mm} min`; };
+const fmtSec = s => s < 60 ? `${Math.round(s)} s` : fmtMin(s / 60);
+
+// sample temperature trace: tempAt(t) in tab units, window ending at `now`
+function drawTrace(tempAt, now, span, unit) {
+  const t = $("trace"); t.innerHTML = "";
+  const y = T => 90 - (T - 40) * 1.25;
+  for (const T of [95, 72, 55]) {
+    el("line", {x1:34, x2:356, y1:y(T), y2:y(T), stroke:C.line, "stroke-dasharray":"3 4"}, t);
+    txt(T + "°", {x:30, y:y(T) + 4, "font-size":10, fill:ZONE[T], "text-anchor":"end"}, t);
+  }
+  let d = "";
+  const t0 = Math.max(0, now - span);
+  for (let k = 0; k <= 160; k++) {
+    const tt = t0 + (now - t0) * k / 160;
+    d += (k ? " L" : "M") + (36 + 318 * (tt - t0) / span).toFixed(1) + " " + y(tempAt(tt)).toFixed(1);
+  }
+  el("path", {d, fill:"none", stroke:C.amber, "stroke-width":2}, t);
+  txt("sample °C vs time (" + unit + ")", {x:356, y:94, "font-size":9, fill:C.dim, "text-anchor":"end"}, t);
+}
+// first-order approach to each zone's temperature (tau in the same time unit)
+function scheduleTemp(zones, durs, tau, t) {
+  const cyc = durs.reduce((a, b) => a + b, 0);
+  let tc = t % cyc, prev = zones[zones.length - 1], k = 0;
+  if (t < 0.001) return 25;
+  while (tc > durs[k]) { tc -= durs[k]; prev = zones[k]; k++; }
+  return zones[k] + (prev - zones[k]) * Math.exp(-tc / tau);
+}
+
+// ---------- water baths (p.26) ----------
+const BATH = {zones:[95, 55, 72], durs:[5, 3, 5], cycles:35};
+const bath = {k:-1, c:1};   // k = index of the bath the tube is in (-1 = not started)
+function bathTime() { return bath.k < 0 ? 0 : (bath.c - 1) * 13 + BATH.durs.slice(0, bath.k + 1).reduce((a, b) => a + b, 0); }
+function drawBath() {
+  const g = $("dev"); g.innerHTML = "";
+  const xs = [20, 135, 250];
+  BATH.zones.forEach((T, k) => {
+    el("rect", {x:xs[k], y:80, width:90, height:80, rx:8, fill:C.panel, stroke:C.dim}, g);
+    el("rect", {x:xs[k] + 6, y:100, width:78, height:54, rx:4, fill:ZONE[T], opacity:.35}, g);
+    txt(T + " °C", {x:xs[k] + 45, y:184, "font-size":13, fill:ZONE[T], "text-anchor":"middle"}, g);
+    txt(BATH.durs[k] + " min", {x:xs[k] + 45, y:72, "font-size":10, fill:C.dim, "text-anchor":"middle"}, g);
+  });
+  // tube
+  const tx = bath.k < 0 ? 180 : xs[bath.k] + 45, ty = bath.k < 0 ? 22 : 88;
+  el("path", {d:`M${tx - 6} ${ty} v34 a6 6 0 0 0 12 0 v-34 z`, fill:C.tx, opacity:.9}, g);
+  el("rect", {x:tx - 6, y:ty + 18, width:12, height:16, fill:C.violet, opacity:.8}, g);
+  txt("cycle " + Math.max(1, bath.c) + " / 35", {x:350, y:20, "font-size":11, fill:C.tx, "text-anchor":"end"}, g);
+  const caps = ["95 °C bath, 5 min: the strands separate (denature).", "55 °C bath, 3 min: the primers bind (anneal).", "72 °C bath, 5 min: the polymerase extends."];
+  $("cap").textContent = bath.k < 0 ? "Before thermocyclers, the tube was carried by hand from bath to bath (p.26)." : `Cycle ${bath.c} · ${caps[bath.k]}`;
+  const t = bathTime();
+  drawTrace(tt => scheduleTemp(BATH.zones, BATH.durs, 0.5, tt), Math.max(t, 1), 40, "min");
+  $("read").textContent = `Elapsed ${fmtMin(t)} · 35 cycles × (5 + 3 + 5) min = 455 min ≈ 8 h`;
+}
+function bathNext() {
+  if (bath.k === 2 && bath.c === BATH.cycles) return false;
+  if (bath.k === 2) { bath.k = 0; bath.c++; } else bath.k++;
+  return true;
+}
+
+// ---------- flow chip (pp. 37–39) ----------
+const flow = {n:20, s:0, multi:false};
+const Y_TOP = 40, Y_BOT = 160, BANDS = [[30, 76, 95], [76, 124, 72], [124, 170, 55]];
+let segs = [], stops = [], LOOP = 1;
+function buildPath() {
+  segs = []; stops = [];
+  const w = 290 / flow.n;
+  let x = 14, y = Y_TOP;
+  const go = (x2, y2) => { segs.push({x1:x, y1:y, x2, y2, len:Math.hypot(x2 - x, y2 - y)}); x = x2; y = y2; };
+  for (let j = 0; j < flow.n; j++) {
+    const xa = 34 + j * w, xb = xa + w / 2;
+    go(xa, Y_TOP); go(xa, Y_BOT); go(xb, Y_BOT); go(xb, Y_TOP);
+  }
+  go(346, Y_TOP);
+  let cum = 0;
+  for (const s of segs) {
+    s.cum = cum;
+    if (s.x1 === s.x2) for (const yc of [53, 100, 147]) {
+      if ((yc - s.y1) * (yc - s.y2) < 0) stops.push(cum + Math.abs(yc - s.y1));
+    }
+    cum += s.len;
+  }
+  stops.sort((a, b) => a - b);
+  flow.total = cum;
+  LOOP = 2 * (Y_BOT - Y_TOP) + w;   // down, across the bottom, up, across the top
+}
+function pointAt(s) {
+  s = Math.max(0, Math.min(flow.total, s));
+  for (const g of segs) if (s <= g.cum + g.len) { const f = g.len ? (s - g.cum) / g.len : 0; return [g.x1 + f * (g.x2 - g.x1), g.y1 + f * (g.y2 - g.y1)]; }
+  const last = segs[segs.length - 1]; return [last.x2, last.y2];
+}
+function bandT(yv) { for (const [a, b, T] of BANDS) if (yv >= a && yv < b) return T; return 95; }
+function pieces(g, s0, s1, color, w) {
+  if (s1 <= 0) return;
+  let d = "";
+  for (let s = Math.max(0, s0); s <= s1; s += 2) { const [px, py] = pointAt(s); d += (d ? " L" : "M") + px.toFixed(1) + " " + py.toFixed(1); }
+  if (d) el("path", {d, fill:"none", stroke:color, "stroke-width":w, "stroke-linecap":"butt"}, g);
+}
+function drawFlow() {
+  const g = $("dev"); g.innerHTML = "";
+  for (const [a, b, T] of BANDS) {
+    el("rect", {x:10, y:a, width:340, height:b - a, fill:ZONE[T], opacity:.22}, g);
+    txt(T + " °C", {x:354, y:(a + b) / 2 + 4, "font-size":10, fill:ZONE[T], "text-anchor":"end"}, g);
+  }
+  el("rect", {x:10, y:30, width:340, height:140, rx:6, fill:"none", stroke:C.dim}, g);
+  const d = segs.map((s, k) => (k ? "L" : "M") + s.x1.toFixed(1) + " " + s.y1 + " L" + s.x2.toFixed(1) + " " + s.y2).join(" ");
+  el("path", {d, fill:"none", stroke:"#4a5680", "stroke-width":4}, g);
+  txt("in", {x:12, y:24, "font-size":10, fill:C.dim}, g);
+  txt("out", {x:348, y:24, "font-size":10, fill:C.dim, "text-anchor":"end"}, g);
+  const s = flow.s;
+  if (flow.multi) {
+    const seq = [[22, C.tx], [6, "#ffffff"], [18, "#5a6684"], [6, "#ffffff"], [22, C.violet], [6, "#ffffff"], [18, "#5a6684"], [6, "#ffffff"], [22, C.cyan]];
+    let at = s;
+    for (const [len, col] of seq) { pieces(g, at - len, at, col, 4); at -= len; }
+    txt("samples · air bubbles · washes", {x:180, y:192, "font-size":10, fill:C.dim, "text-anchor":"middle"}, g);
+  } else pieces(g, s - 22, s, C.tx, 4);
+  const cyc = Math.max(0, Math.min(flow.n, Math.floor((s - 20) / LOOP)));   // 20 = lead-in from the inlet
+  txt("cycles done: " + cyc + " / " + flow.n, {x:180, y:16, "font-size":11, fill:C.tx, "text-anchor":"middle"}, g);
+  const [, py] = pointAt(s);
+  const T = bandT(py);
+  const what = {95:"denature", 72:"extend (on the way up)", 55:"anneal"}[T];
+  $("cap").textContent = s >= flow.total ? `Product leaves the outlet after ${flow.n} cycles. The number of loops sets the number of cycles.`
+    : `The sample flows through the ${T} °C band: ${what}. Each loop down and back up is one cycle.`;
+  const Tc = +$("speed").value, t72 = Tc / 6;
+  drawTrace(ss => bandT(pointAt(ss)[1]), Math.max(s, 1), LOOP * 3, "path");
+  $("read").textContent = `${flow.n} cycles × ${Tc} s = ${fmtSec(flow.n * Tc)} · about ${t72.toFixed(1)} s at 72 °C per loop → enough for ≈ ${Math.round(t72 * 100)} bp (Taq: 1000 bp in < 10 s, p.14)`;
+}
+
+// ---------- rotary (p.50) ----------
+const ROT = {zones:[95, 55, 72], ang:[-90, 150, 30]};
+const rot = {k:-1, c:1, cycles:30};
+function drawRot() {
+  const g = $("dev"); g.innerHTML = "";
+  const cx = 180, cy = 104, R = 78;
+  el("circle", {cx, cy, r:R + 14, fill:C.panel, stroke:C.dim}, g);
+  ROT.zones.forEach((T, k) => {
+    const a = ROT.ang[k] * Math.PI / 180, bx = cx + R * Math.cos(a), by = cy + R * Math.sin(a);
+    el("rect", {x:bx - 18, y:by - 12, width:36, height:24, rx:4, fill:ZONE[T], opacity:.75, transform:`rotate(${ROT.ang[k] + 90} ${bx} ${by})`}, g);
+    const lx = cx + (R + 30) * Math.cos(a), ly = cy + (R + 30) * Math.sin(a);
+    txt(T + "°", {x:lx, y:ly + 4, "font-size":11, fill:ZONE[T], "text-anchor":"middle"}, g);
+  });
+  const ang = rot.k < 0 ? -30 : ROT.ang[rot.k];
+  const a = ang * Math.PI / 180;
+  el("line", {x1:cx, y1:cy, x2:cx + (R + 6) * Math.cos(a), y2:cy + (R + 6) * Math.sin(a), stroke:"#cfe6ff", "stroke-width":9, opacity:.55, "stroke-linecap":"round"}, g);
+  el("circle", {cx:cx + R * Math.cos(a), cy:cy + R * Math.sin(a), r:5, fill:C.violet}, g);
+  el("circle", {cx, cy, r:8, fill:C.dim}, g);
+  txt("motor", {x:cx, y:cy + 22, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  const caps = ["(i) 95 °C block: denature.", "(ii) 55 °C block: anneal.", "(iii) 72 °C block: extend."];
+  $("cap").textContent = rot.k < 0 ? "Three blocks stay at fixed temperatures; a motor turns the chip from one to the next (p.50)."
+    : `Cycle ${rot.c} · ${caps[rot.k]} One full turn = one cycle.`;
+  const dw = +$("dwell").value;
+  const t = rot.k < 0 ? 0 : ((rot.c - 1) * 3 + rot.k + 1) * dw;
+  drawTrace(tt => scheduleTemp(ROT.zones, [dw, dw, dw], Math.max(0.15, dw * 0.08), tt), Math.max(t, 1), dw * 9, "s");
+  $("read").textContent = `Elapsed ${fmtSec(t)} · ${rot.cycles} cycles × 3 × ${dw} s = ${fmtSec(rot.cycles * 3 * dw)} (dwell times illustrative)`;
+}
+function rotNext() {
+  if (rot.k === 2 && rot.c === rot.cycles) return false;
+  if (rot.k === 2) { rot.k = 0; rot.c++; } else rot.k++;
+  return true;
+}
+
+// ---------- framework ----------
+const FOOT = {
+  bath: "95 °C 5 min → 55 °C 3 min → 72 °C 5 min, 35 cycles = 8 hours (L07 p.26). Three-chamber baths cost about $1,000 (p.27).",
+  flow: "Zones 95 / 72 / 55 °C and outlets after 20–40 cycles as in p.38 (Nature 2003); p.37's chip (Science 1998) used 95 / 77 / 60 °C. Samples separated by air bubbles and washes: p.39. The time-at-72 °C estimate is Background.",
+  rotary: "Blocks: (i) 95 °C, (ii) 55 °C, (iii) 72 °C; denature → anneal → extension = 1 cycle (L07 p.50, Lab Chip 2012). The slide gives no times."
+};
+let tab = "bath", timer = null, raf = null, last = 0;
+function render() {
+  $("flowCtl").hidden = tab !== "flow";
+  $("rotCtl").hidden = tab !== "rotary";
+  $("speedv").textContent = $("speed").value;
+  $("dwellv").textContent = $("dwell").value;
+  if (tab === "bath") drawBath(); else if (tab === "flow") drawFlow(); else drawRot();
+  $("foot").textContent = FOOT[tab];
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll("[data-n]").forEach(b => b.classList.toggle("on", +b.dataset.n === flow.n));
+  $("multi").classList.toggle("on", flow.multi);
+}
+function next() {
+  let more;
+  if (tab === "bath") more = bathNext();
+  else if (tab === "rotary") more = rotNext();
+  else { const nx = stops.find(v => v > flow.s + 0.5); flow.s = nx === undefined ? flow.total : nx; more = flow.s < flow.total; }
+  render();
+  return more;
+}
+function play() {
+  $("play").textContent = "⏸ Pause";
+  if (tab === "flow") {
+    if (flow.s >= flow.total) flow.s = 0;
+    last = performance.now();
+    const tick = now => {
+      flow.s += (now - last) / 1000 * LOOP / Math.min(3, Math.max(0.6, +$("speed").value / 8));
+      last = now;
+      if (flow.s >= flow.total) { flow.s = flow.total; render(); pause(); return; }
+      render(); raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+  } else timer = setInterval(() => { if (!next()) pause(); }, 700);
+}
+function pause() { clearInterval(timer); cancelAnimationFrame(raf); timer = raf = null; $("play").textContent = "▶ Play"; }
+function reset() { pause(); bath.k = -1; bath.c = 1; rot.k = -1; rot.c = 1; flow.s = 0; render(); }
+$("play").onclick = () => (timer || raf) ? pause() : play();
+$("step").onclick = () => { pause(); next(); };
+$("reset").onclick = reset;
+$("skip").onclick = () => {
+  pause();
+  if (tab === "bath") { bath.k = 2; bath.c = BATH.cycles; }
+  else if (tab === "rotary") { rot.k = 2; rot.c = rot.cycles; }
+  else flow.s = flow.total;
+  render();
+};
+document.querySelectorAll("[data-n]").forEach(b => b.onclick = () => { pause(); flow.n = +b.dataset.n; flow.s = 0; buildPath(); render(); });
+$("multi").onclick = () => { flow.multi = !flow.multi; render(); };
+$("speed").oninput = render;
+$("dwell").oninput = render;
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { pause(); tab = b.dataset.tab; render(); });
+const want = new URLSearchParams(location.search).get("tab");
+if (FOOT[want]) tab = want;
+if (RM) $("play").hidden = true;
+buildPath();
+render();
+</script>
+</body>
+</html>

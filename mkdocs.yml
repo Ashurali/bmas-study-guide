@@ -92,6 +92,7 @@ nav:
   - Home: index.md
   - Lessons:
       - lessons/index.md
+      - lessons/l07-pcr/index.md
   - Animations: reference/animations.md
   - Reference:
       - reference/glossary.md

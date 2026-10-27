@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Gel and multiplex PCR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 13px "IBM Plex Mono",monospace;color:var(--dim)}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+.band{cursor:pointer}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>Reading the product: gel electrophoresis</h1>
+<div class="row tabs" role="tablist">
+  <button data-tab="gel">Run a gel</button>
+  <button data-tab="multi">Multiplex</button>
+</div>
+<div class="panel">
+  <svg id="stage" viewBox="0 0 360 230" role="img" aria-label="Agarose gel with lanes and bands"></svg>
+  <div class="row" id="pairs" hidden aria-label="Primer pairs in the tube">
+    <button data-pair="0">Pair 1</button>
+    <button data-pair="1">Pair 2</button>
+    <button data-pair="2">Pair 3</button>
+    <button data-pair="3">Pair 4</button>
+    <button id="same">Make 1 and 4 the same length</button>
+  </div>
+  <p class="cap" id="cap"></p>
+  <div class="row">
+    <button id="play">▶ Run</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+    <span class="read" id="count"></span>
+  </div>
+</div>
+<p class="note" id="foot"></p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff"};
+const LADDER = [1500, 1000, 700, 500, 400, 300, 200, 100];
+const TOP = 52, RUN = 134, LMAX = Math.log10(3000), LMIN = Math.log10(100);
+// distance travelled ∝ log(size), scaled by run progress p (0–1); small fragments travel farther
+const yOf = (bp, p) => TOP + p * RUN * (LMAX - Math.log10(bp)) / (LMAX - LMIN);
+
+const PAIRS = [{bp:300, col:C.amber}, {bp:150, col:C.cyan}, {bp:600, col:C.violet}, {bp:220, col:C.tx}];
+let tab = "gel", stage = 0, p = 0, raf = null, picked = null, on = [true, true, true, true], same = false;
+
+function gelFrame(g, lanes) {
+  el("rect", {x:20, y:16, width:320, height:8, rx:3, fill:"#2a2f3f"}, g);
+  txt("−  cathode", {x:28, y:12, "font-size":10, fill:C.dim}, g);
+  el("rect", {x:20, y:212, width:320, height:8, rx:3, fill:C.red, opacity:.8}, g);
+  txt("+  anode", {x:28, y:230, "font-size":10, fill:C.red}, g);
+  el("rect", {x:40, y:30, width:280, height:178, rx:6, fill:"#1a2340", stroke:C.line}, g);
+  el("path", {d:"M340 60 L340 180 M334 172 L340 182 L346 172", stroke:C.dim, fill:"none", "stroke-width":1.5}, g);
+  txt("DNA moves", {x:332, y:120, "font-size":9, fill:C.dim, "text-anchor":"end", transform:"rotate(-90 332 120)"}, g);
+  lanes.forEach((ln, k) => {
+    const x = ln.x;
+    el("rect", {x:x - 16, y:38, width:32, height:7, rx:2, fill:"#0b1020", stroke:C.line}, g);
+    txt(ln.name, {x, y:206, "font-size":10, fill:C.dim, "text-anchor":"middle"}, g);
+  });
+}
+function band(g, x, y, col, key, w) {
+  const b = el("rect", {x:x - (w || 14), y:y - 3, width:2 * (w || 14), height:6, rx:2, fill:col, class:key ? "band" : ""}, g);
+  if (key) {
+    b.setAttribute("tabindex", 0); b.setAttribute("role", "button"); b.setAttribute("aria-label", key);
+    b.addEventListener("click", () => { picked = key; render(); });
+    if (picked === key) { b.setAttribute("stroke", "#fff"); b.setAttribute("stroke-width", 2); }
+  }
+  return b;
+}
+
+const GEL_CAPS = [
+  "Load: PCR products and a DNA ladder (pieces of known size) go into the wells at the − end.",
+  "Run: with the current on, the DNA moves toward the + electrode. Short pieces move faster.",
+  "Read: compare each band with the ladder. Tap a sample band."
+];
+const SAMPLES = [{name:"S1", bp:400, read:"≈ 400 bp: level with the 400 bp ladder band."}, {name:"S2", bp:900, read:"Between the 700 and 1000 bp ladder bands: roughly 900 bp."}, {name:"N", bp:0, read:"Negative control (no template): no band, so nothing was contaminated."}];
+function drawGel(g) {
+  const lanes = [{x:80, name:"ladder"}, {x:150, name:"S1"}, {x:220, name:"S2"}, {x:290, name:"N"}];
+  gelFrame(g, lanes);
+  for (const bp of LADDER) {
+    const y = yOf(bp, p);
+    band(g, 80, y, C.dim, null);
+    if (p > 0.95) txt(String(bp), {x:60, y:y + 3, "font-size":8, fill:C.dim, "text-anchor":"end"}, g);
+  }
+  SAMPLES.forEach((s, k) => { if (s.bp) band(g, lanes[k + 1].x, yOf(s.bp, p), C.amber, s.name); });
+  $("cap").textContent = picked && stage === 2 ? SAMPLES.find(s => s.name === picked).read : GEL_CAPS[stage];
+}
+
+function drawMulti(g) {
+  const lanes = [{x:110, name:"marker"}, {x:230, name:"one tube"}];
+  gelFrame(g, lanes);
+  for (const bp of LADDER) band(g, 110, yOf(bp, p), C.dim, null);
+  PAIRS.forEach((pr, k) => {
+    if (!on[k]) return;
+    const bp = same && k === 3 ? PAIRS[0].bp : pr.bp;
+    band(g, 230, yOf(bp, p) + (same && k === 3 ? 1 : 0), pr.col, null, 18);
+    if (p > 0.95) txt("product " + (k + 1), {x:256, y:yOf(bp, p) + (same && k === 3 ? 12 : 3), "font-size":9, fill:pr.col}, g);
+  });
+  const n = on.filter(Boolean).length;
+  $("cap").textContent = stage < 2 ? `Four primer pairs can share one tube; ${n} selected. Each pair copies a different target with its own length.`
+    : same && on[0] && on[3] ? "Products 1 and 4 now have the same length and land on the same spot: you can't tell them apart."
+    : `One tube, ${n} target${n === 1 ? "" : "s"}, ${n} band${n === 1 ? "" : "s"}: different lengths keep the products apart (p.35).`;
+  document.querySelectorAll("[data-pair]").forEach(b => b.classList.toggle("on", on[+b.dataset.pair]));
+  $("same").classList.toggle("on", same);
+}
+
+function render() {
+  const g = $("stage"); g.innerHTML = "";
+  if (tab === "gel") drawGel(g); else drawMulti(g);
+  $("pairs").hidden = tab !== "multi";
+  $("count").textContent = ["loaded", "running", "done"][stage];
+  $("foot").textContent = tab === "gel"
+    ? "Gel set-up from L07 p.33. Background (not on slides): DNA's phosphate backbone is negatively charged, and the gel works like a sieve, so short pieces get through faster. Sizes illustrative."
+    : "Multiplex PCR: all primer pairs in a single tube, products sorted by size beside a marker (L07 p.35). Sizes illustrative.";
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+}
+function animateTo(target, done) {
+  cancelAnimationFrame(raf);
+  if (RM) { p = target; done(); render(); return; }
+  const p0 = p, t0 = performance.now();
+  const tick = now => { const f = Math.min(1, (now - t0) / 1600); p = p0 + (target - p0) * f; render(); if (f < 1) raf = requestAnimationFrame(tick); else { done(); render(); } };
+  raf = requestAnimationFrame(tick);
+}
+function stepNext() {
+  if (stage === 0) { stage = 1; animateTo(0.5, () => {}); }
+  else if (stage === 1) animateTo(1, () => { stage = 2; });
+}
+$("play").onclick = () => { if (stage === 2) return; stage = 1; animateTo(1, () => { stage = 2; }); };
+$("step").onclick = stepNext;
+$("reset").onclick = () => { cancelAnimationFrame(raf); stage = 0; p = 0; picked = null; render(); };
+document.querySelectorAll("[data-pair]").forEach(b => b.onclick = () => { on[+b.dataset.pair] = !on[+b.dataset.pair]; render(); });
+$("same").onclick = () => { same = !same; render(); };
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { cancelAnimationFrame(raf); tab = b.dataset.tab; stage = 0; p = 0; picked = null; render(); });
+const want = new URLSearchParams(location.search).get("tab");
+if (want === "multi") tab = "multi";
+if (RM) $("play").hidden = true;
+render();
+</script>
+</body>
+</html>

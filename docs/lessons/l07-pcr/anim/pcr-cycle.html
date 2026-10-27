@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>The PCR cycle</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+button.chip{color:var(--tx);font-weight:400;font-size:13px;padding:0 10px}
+.read{font:600 14px "IBM Plex Mono",monospace;color:var(--amber)}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+label{font-size:13px;color:var(--dim);display:block;margin-top:6px}
+input[type=range]{width:100%;height:40px;accent-color:var(--cyan)}
+.hl{filter:drop-shadow(0 0 3px #fff) drop-shadow(0 0 6px #fff)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>The PCR cycle: denature → anneal → extend</h1>
+
+<div class="panel">
+  <svg id="mol" viewBox="0 0 360 180" role="img" aria-label="DNA strands, primers, dNTPs and polymerase during the current PCR step"></svg>
+  <p class="cap" id="cap"></p>
+  <div class="row" aria-label="What is in the tube">
+    <button class="chip" data-hl="template">Template</button>
+    <button class="chip" data-hl="primers">Primers</button>
+    <button class="chip" data-hl="dntp">dNTPs</button>
+    <button class="chip" data-hl="pol">Polymerase</button>
+    <button class="chip" data-hl="temp">Temperature</button>
+  </div>
+  <div class="row">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+  </div>
+  <label for="jump">Jump to the end of cycle <span id="jumpv">0</span> of 25</label>
+  <input type="range" id="jump" min="0" max="25" value="0">
+</div>
+
+<div class="panel">
+  <svg id="trace" viewBox="0 0 360 120" role="img" aria-label="Temperature program over time"></svg>
+  <p class="read" id="clock"></p>
+  <p class="read" id="copies"></p>
+</div>
+
+<div class="panel">
+  <div class="row" style="margin-top:0">
+    <button id="showTree" class="on">Strand tree</button>
+    <button id="showGrowth">Growth curve</button>
+  </div>
+  <svg id="tree" viewBox="0 0 360 140" role="img" aria-label="Family tree of double strands"></svg>
+  <svg id="growth" viewBox="0 0 360 140" role="img" aria-label="Copies per cycle, ideal and real" hidden></svg>
+  <p class="note" id="panelNote"></p>
+</div>
+<p class="note">Program from L07 p.30 (94 °C 5:00 · 25 × [94 / 55 / 72 °C, 0:30 each] · 72 °C 7:30 · 4 °C). Drawing not to scale.</p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", pol:"#6f86c0"};
+const CYCLES = 25;
+
+// The p.30 program as a list of steps
+const steps = [{k:"mix", T:25, dur:0, c:0}, {k:"init", T:94, dur:300, c:0}];
+for (let c = 1; c <= CYCLES; c++) steps.push({k:"den", T:94, dur:30, c}, {k:"ann", T:55, dur:30, c}, {k:"ext", T:72, dur:30, c});
+steps.push({k:"final", T:72, dur:450, c:CYCLES}, {k:"hold", T:4, dur:0, c:CYCLES});
+
+const CHIPS = {
+  template: "Template: the DNA that carries the target sequence. Each strand gets copied.",
+  primers: "Primers: two short single strands that mark the two ends of the target. Copying starts at each primer's 3′ end.",
+  dntp: "dNTPs: the four building blocks (dATP, dCTP, dGTP, dTTP) that the polymerase adds one at a time.",
+  pol: "Thermostable DNA polymerase (e.g. Taq): survives 94 °C and adds dNTPs at 72 °C.",
+  temp: "Temperature cycles: 94 °C separates the strands, 55 °C lets primers bind, 72 °C lets the polymerase extend."
+};
+
+function caption(s) {
+  const cy = "Cycle " + s.c + " · ";
+  switch (s.k) {
+    case "mix": return "Room temperature: template DNA, two primers, dNTPs and a thermostable polymerase are mixed in one tube.";
+    case "init": return "Initial denaturation, 94 °C for 5:00: the double-stranded template comes fully apart.";
+    case "den": return cy + "Denature, 94 °C: heat breaks the base pairs and the two strands separate." + (s.c > 1 ? " Earlier copies are templates now too." : "");
+    case "ann": return cy + "Anneal, 55 °C: each primer pairs with its matching site near the 3′ end of one strand.";
+    case "ext": return cy + "Extend, 72 °C: the polymerase adds dNTPs to each primer's 3′ end, building the new strand 5′→3′.";
+    case "final": return "Final extension, 72 °C for 7:30: any unfinished strands are completed.";
+    case "hold": return "Hold at 4 °C: the reaction stops and waits in the cold.";
+  }
+}
+
+// ---------- molecular view ----------
+const X1 = 44, X2 = 316, PL = 56;
+function strand(g, xa, xb, y, color, dir, bonds) {
+  const lo = Math.min(xa, xb), hi = Math.max(xa, xb);
+  el("line", {x1:lo, y1:y, x2:hi, y2:y, stroke:color, "stroke-width":5, "stroke-linecap":"round"}, g);
+  for (let x = lo + 6; x < hi - 2; x += 12) {
+    el("line", {x1:x, y1:y, x2:x, y2:y + dir * 6, stroke:color, "stroke-width":2.5}, g);
+    if (bonds) el("line", {x1:x, y1:y + dir * 6, x2:x, y2:y + dir * 8, stroke:C.dim, "stroke-width":1, "stroke-dasharray":"1 1"}, g);
+  }
+}
+function ends(g, xa, xb, y, la, lb) {
+  txt(la, {x:xa - 6, y:y + 4, "font-size":9, fill:C.dim, "text-anchor":"end"}, g);
+  txt(lb, {x:xb + 6, y:y + 4, "font-size":9, fill:C.dim}, g);
+}
+function arrow(g, x, y, dirx, color) {
+  el("path", {d:`M${x} ${y - 5} L${x + dirx * 7} ${y} L${x} ${y + 5}Z`, fill:color}, g);
+}
+function polymerase(g, x, y) {
+  // rounded blob; the notch is the active site
+  el("ellipse", {cx:x, cy:y - 3, rx:15, ry:10, fill:C.pol, opacity:.9}, g);
+  el("path", {d:`M${x - 4} ${y + 8} L${x} ${y + 1} L${x + 4} ${y + 8} Z`, fill:"#111832"}, g);
+}
+const DNTP = [[120,24],[140,34],[205,20],[228,32],[96,150],[150,162],[214,152],[256,166],[20,90],[340,96],[250,8],[30,40]];
+
+function drawMol(s, p) {
+  const m = $("mol");
+  m.innerHTML = "";
+  const gT = el("g", {}, m), gP = el("g", {}, m), gN = el("g", {}, m), gD = el("g", {}, m), gE = el("g", {}, m);
+  const together = s.k === "mix";
+  const doneDuplex = s.k === "final" || s.k === "hold";
+  const annealed = s.k === "ann" || s.k === "ext" || doneDuplex;
+  const yT = together ? 80 : 52, yB = together ? 94 : 128;
+
+  // template strands (cyan): top 5'→3', bottom 3'→5'
+  strand(gT, X1, X2, yT, C.cyan, 1, together);
+  strand(gT, X1, X2, yB, C.cyan, -1, false);
+  ends(gT, X1, X2, yT, "5′", "3′");
+  ends(gT, X1, X2, yB, "3′", "5′");
+
+  if (!annealed) {
+    // free primers and polymerases floating
+    strand(gP, 150, 196, together ? 22 : 90, C.violet, 1, false);
+    strand(gP, 170, 216, together ? 160 : 104, C.violet, -1, false);
+    polymerase(gE, 300, together ? 22 : 90);
+    polymerase(gE, 64, together ? 160 : 92);
+  } else {
+    // reverse primer on the top strand (3' end at left), forward primer on the bottom strand (3' end at right)
+    const yR = yT + 14, yF = yB - 14;
+    strand(gP, X2 - PL, X2, yR, C.violet, -1, true);
+    arrow(gP, X2 - PL - 2, yR, -1, C.violet);
+    strand(gP, X1, X1 + PL, yF, C.violet, 1, true);
+    arrow(gP, X1 + PL + 2, yF, 1, C.violet);
+    if (s.k === "ext" || doneDuplex) {
+      const q = doneDuplex ? 1 : p;
+      const xf = X1 + PL + q * (X2 - X1 - PL);
+      const xr = X2 - PL - q * (X2 - X1 - PL);
+      if (q > 0.02) {
+        strand(gN, X1 + PL, xf, yF, C.amber, 1, true);
+        strand(gN, xr, X2 - PL, yR, C.amber, -1, true);
+      }
+      if (!doneDuplex) { polymerase(gE, xf + 4, yF - 2); polymerase(gE, xr - 4, yR + 2); }
+      if (doneDuplex || q > 0.95) {
+        txt("3′", {x:X2 + 6, y:yF + 4, "font-size":9, fill:C.amber}, gN);
+        txt("3′", {x:X1 - 6, y:yR + 4, "font-size":9, fill:C.amber, "text-anchor":"end"}, gN);
+      }
+    }
+  }
+  if (!doneDuplex) for (const [x, y] of DNTP) el("circle", {cx:x, cy:y, r:3, fill:C.amber, opacity:.85}, gD);
+
+  const groups = {template:gT, primers:gP, dntp:gD, pol:gE};
+  if (groups[hlKey]) groups[hlKey].setAttribute("class", "hl");
+  txt(s.T + " °C", {x:354, y:14, "font-size":12, fill:tempColor(s.T), "text-anchor":"end"}, m);
+}
+function tempColor(T) { return T >= 90 ? "#ff8a5c" : T >= 65 ? C.amber : T >= 40 ? "#6ea8ff" : C.dim; }
+
+// ---------- temperature trace (schematic widths) ----------
+function drawTrace(i) {
+  const t = $("trace");
+  t.innerHTML = "";
+  const y = T => 104 - T * 0.92;
+  for (const T of [94, 72, 55]) {
+    el("line", {x1:34, x2:354, y1:y(T), y2:y(T), stroke:C.line, "stroke-dasharray":"3 4"}, t);
+    txt(T + "°", {x:30, y:y(T) + 4, "font-size":10, fill:C.dim, "text-anchor":"end"}, t);
+  }
+  txt("°C", {x:4, y:12, "font-size":9, fill:C.dim}, t);
+  const W = 26, R = 8, first = Math.max(0, i - 8);
+  let x = 40, prev = first > 0 ? steps[first - 1].T : 25;
+  let past = `M${x} ${y(prev)}`, cur = "";
+  for (let k = first; k <= i; k++) {
+    const T = steps[k].T;
+    const seg = ` L${x + R} ${y(T)} L${x + R + W} ${y(T)}`;
+    if (k < i) past += seg; else cur = `M${x} ${y(prev)}` + seg;
+    if (steps[k].dur >= 300) txt(steps[k].dur === 300 ? "5:00" : "7:30", {x:x + R + 2, y:y(T) - 4, "font-size":9, fill:C.dim}, t);
+    x += R + W; prev = T;
+  }
+  el("path", {d:past, fill:"none", stroke:C.cyan, "stroke-width":2, opacity:.55}, t);
+  const curPath = el("path", {d:cur, fill:"none", stroke:C.amber, "stroke-width":3}, t);
+  if (hlKey === "temp") curPath.setAttribute("class", "hl");
+  el("circle", {cx:x, cy:y(prev), r:4, fill:C.amber}, t);
+}
+
+function fmtTime(sec) { const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + String(s).padStart(2, "0"); }
+function copiesExp(s) {
+  if (s.k === "mix" || s.k === "init") return 0;
+  if (s.k === "den" || s.k === "ann") return s.c - 1;
+  return s.c;
+}
+
+// ---------- strand tree (cycles 0–4, as on p.6) ----------
+function drawTree(n) {
+  const t = $("tree");
+  t.innerHTML = "";
+  const g = Math.min(n, 4);
+  let rows = [[["o", "o"]]];
+  for (let r = 1; r <= g; r++) rows.push(rows[r - 1].flatMap(d => [[d[0], "n"], [d[1], "n"]]));
+  const pos = (r, j) => { const m = 2 ** r, sp = 320 / m; return 20 + sp * (j + 0.5); };
+  rows.forEach((row, r) => {
+    const yy = 8 + r * 26;
+    row.forEach((d, j) => {
+      const cx = pos(r, j);
+      if (r > 0) el("line", {x1:pos(r - 1, j >> 1), y1:yy - 8, x2:cx, y2:yy, stroke:C.line, "stroke-width":1}, t);
+      el("rect", {x:cx - 4, y:yy, width:3, height:16, rx:1, fill:d[0] === "o" ? C.cyan : C.amber}, t);
+      el("rect", {x:cx + 1, y:yy, width:3, height:16, rx:1, fill:d[1] === "o" ? C.cyan : C.amber}, t);
+    });
+    txt(String(r), {x:6, y:yy + 12, "font-size":9, fill:C.dim}, t);
+  });
+  const withOld = rows[g].filter(d => d.includes("o")).length;
+  $("panelNote").textContent = n <= 4
+    ? `After cycle ${g}: ${2 ** g} double strands; ${withOld} still hold an original (cyan) strand. New strands are amber. (p.6)`
+    : `The tree stops at cycle 4 (16 double strands). After cycle ${n}: ${(2 ** n).toLocaleString("en-US")} double strands, and still only 2 hold an original strand.`;
+}
+
+// ---------- growth curve (log scale) ----------
+const REAL = [1];
+for (let c = 1; c <= 35; c++) { const N = REAL[c - 1]; REAL.push(N * (1 + 0.9 * (1 - N / 1e7))); }
+function drawGrowth(n) {
+  const t = $("growth");
+  t.innerHTML = "";
+  const X = c => 40 + c * 9, Y = l => 120 - l * 9;
+  for (const l of [0, 4, 8, 12]) {
+    el("line", {x1:40, x2:355, y1:Y(l), y2:Y(l), stroke:C.line, "stroke-dasharray":"3 4"}, t);
+    txt("10^" + l, {x:36, y:Y(l) + 3, "font-size":9, fill:C.dim, "text-anchor":"end"}, t);
+  }
+  for (const c of [0, 10, 20, 30]) txt(String(c), {x:X(c), y:134, "font-size":9, fill:C.dim, "text-anchor":"middle"}, t);
+  txt("cycle", {x:355, y:134, "font-size":9, fill:C.dim, "text-anchor":"end"}, t);
+  let ideal = "", real = "";
+  for (let c = 0; c <= 35; c++) {
+    ideal += (c ? " L" : "M") + X(c) + " " + Y(Math.min(12, c * Math.LOG10E * Math.LN2));
+    real += (c ? " L" : "M") + X(c) + " " + Y(Math.log10(REAL[c]));
+  }
+  el("path", {d:ideal, fill:"none", stroke:C.cyan, "stroke-width":2}, t);
+  el("path", {d:real, fill:"none", stroke:C.amber, "stroke-width":2, "stroke-dasharray":"5 3"}, t);
+  txt("ideal 2ⁿ", {x:X(30), y:Y(10.4), "font-size":10, fill:C.cyan, "text-anchor":"middle"}, t);
+  txt("real: levels off", {x:X(22), y:Y(5.4), "font-size":10, fill:C.amber, "text-anchor":"middle"}, t);
+  el("line", {x1:X(n), x2:X(n), y1:Y(12), y2:Y(0), stroke:C.tx, "stroke-width":1, opacity:.5}, t);
+  $("panelNote").textContent = "Copies per starting molecule. Ideal doubling is a straight line on a log scale. The real curve (illustrative: 90 % efficiency, reagents running out) is Background; p.40 shows real product levelling off by 35–40 cycles.";
+}
+
+// ---------- state ----------
+let i = 0, timer = null, raf = null, hlKey = null, panel = "tree";
+function render(p) {
+  const s = steps[i];
+  drawMol(s, p);
+  drawTrace(i);
+  $("cap").textContent = hlKey ? CHIPS[hlKey] : caption(s);
+  let elapsed = 0;
+  for (let k = 1; k <= i; k++) elapsed += steps[k].dur;
+  $("clock").textContent = "Elapsed " + fmtTime(elapsed) + " of 50:00 (ramp times not counted)";
+  const e = copiesExp(s);
+  $("copies").textContent = "Copies of the target per starting molecule: 2^" + e + " = " + (2 ** e).toLocaleString("en-US");
+  $("jump").value = s.c; $("jumpv").textContent = s.c;
+  const done = s.k === "ext" ? s.c : (s.k === "final" || s.k === "hold") ? CYCLES : Math.max(0, s.c - 1);
+  if (panel === "tree") drawTree(done); else drawGrowth(done);
+  document.querySelectorAll(".chip").forEach(b => b.classList.toggle("on", b.dataset.hl === hlKey));
+}
+function show(k) {
+  cancelAnimationFrame(raf);
+  i = Math.max(0, Math.min(steps.length - 1, k));
+  hlKey = null;
+  if (steps[i].k === "ext" && !RM) {
+    const t0 = performance.now();
+    const tick = now => { const p = Math.min(1, (now - t0) / 1000); render(p); if (p < 1) raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+  } else render(1);
+}
+function next() { if (i < steps.length - 1) show(i + 1); else pause(); }
+function play() { timer = setInterval(next, 1400); $("play").textContent = "⏸ Pause"; next(); }
+function pause() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+
+$("play").onclick = () => timer ? pause() : play();
+$("step").onclick = () => { pause(); next(); };
+$("reset").onclick = () => { pause(); show(0); };
+$("jump").oninput = e => { pause(); const c = +e.target.value; show(c === 0 ? 0 : 3 * c + 1); };
+document.querySelectorAll(".chip").forEach(b => b.onclick = () => { hlKey = hlKey === b.dataset.hl ? null : b.dataset.hl; render(1); });
+$("showTree").onclick = () => { panel = "tree"; $("tree").hidden = false; $("growth").hidden = true; $("showTree").classList.add("on"); $("showGrowth").classList.remove("on"); render(1); };
+$("showGrowth").onclick = () => { panel = "growth"; $("tree").hidden = true; $("growth").hidden = false; $("showGrowth").classList.add("on"); $("showTree").classList.remove("on"); render(1); };
+if (RM) $("play").hidden = true;
+show(0);
+</script>
+</body>
+</html>

@@ -201,15 +201,17 @@ PCR · DNA polymerase · primer · dNTP · template · denaturation · annealing
 
 | id | Kind | Goes in | Slides | Status |
 |---|---|---|---|---|
-| `l07-hot-spring` | context | §3 Taq vs Pfu (hot springs, *T. aquaticus*) | p.14 | generated, checked OK — 1200×800 WebP = 182 KB |
-| `l07-water-baths` | context | §5 Water-bath PCR | pp. 26–28 | generated; tiny pseudo-text on dials (open question 3) |
-| `l07-thermocycler` | context | §6 Thermocyclers | pp. 30, 34 | to generate |
-| `l07-flow-chip` | context | §8 Continuous-flow chip | pp. 37–39 | to generate |
-| `l07-micropcr` | context | §9 microPCR | p.42 | to generate |
-| `l07-droplets` | context | §10 Microdroplet PCR | pp. 44–47 | to generate |
-| `l07-rotary` | context | §11 Rotary PCR | pp. 50–51 | to generate |
-| `l07-quiz-anneal` | quiz | alternative drawing for quiz Q1 (which step?) | pp. 9, 13 | to generate |
-| `l07-quiz-flow-chip` | quiz | quiz Q13 (which system?) | pp. 37–38 | to generate |
-| `l07-quiz-emulsion` | quiz | quiz Q15 (which technique?) | pp. 45–46 | to generate |
+| `l07-hot-spring` | context | §3 Taq vs Pfu (hot springs, *T. aquaticus*) | p.14 | in site, 182 KB |
+| `l07-water-baths` | context | §5 Water-bath PCR | pp. 26–28 | in site, 71 KB (dial pseudo-text accepted by owner) |
+| `l07-thermocycler` | context | §6 Thermocyclers | pp. 30, 34 | in site, 56 KB |
+| `l07-flow-chip` | context | §8 Continuous-flow chip | pp. 37–39 | in site, 81 KB (channel loops along the chip, not across the bars — fine as context) |
+| `l07-micropcr` | context | §9 microPCR | p.42 | in site, 134 KB |
+| `l07-droplets` | context | §10 Microdroplet PCR | pp. 44–47 | in site, 20 KB |
+| `l07-rotary` | context | §11 Rotary PCR | pp. 50–51 | in site, 64 KB |
+| `l07-quiz-anneal` | quiz | quiz Q17 (which step?) | pp. 9, 13 | in site, 19 KB |
+| `l07-quiz-flow-chip` | quiz | quiz Q13 (which system?) | pp. 37–38 | in site, 21 KB |
+| `l07-quiz-emulsion` | quiz | quiz Q16 (which technique?) | pp. 45–46 | in site, 71 KB |
+
+**Built (2026-10-27):** the quiz has 18 questions — the 15 topics in §4 (Q15 split into multiplex and emulsion questions) plus the anneal picture and a SMRT question; 6 use this site's SVG drawings and 3 use the AI quiz drawings. Owner answers to §7: §13 stays Background-only, the spec's pilot text stays, the water-bath pseudo-text is accepted.
 
 Quiz questions that use an AI image are extra to the ≥ 4 questions that use this site's own SVG drawings (spec §16). Each context image is a `<figure>` after its section's bullets, captioned "AI-generated illustration — <what it shows>" (spec §8.4).

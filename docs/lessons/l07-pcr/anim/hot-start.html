@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Hot-start PCR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 13px "IBM Plex Mono",monospace;color:var(--dim)}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+.bg{border-left:3px solid var(--violet);padding-left:8px}
+label{font-size:13px;color:var(--dim);display:block;margin-top:6px}
+input[type=range]{width:100%;height:40px;accent-color:var(--cyan)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>Keeping PCR specific: hot start</h1>
+<div class="row tabs" role="tablist">
+  <button data-tab="race">Ramp race</button>
+  <button data-tab="ab">Antibody</button>
+  <button data-tab="primer">Primer</button>
+  <button data-tab="dntp">dNTP</button>
+  <button data-tab="apt">Aptamer</button>
+  <button data-tab="anneal">Annealing °C</button>
+</div>
+<div class="panel">
+  <svg id="stage" viewBox="0 0 360 210" role="img" aria-label="Hot-start diagram for the current step"></svg>
+  <div id="tempBox" hidden>
+    <label for="temp">Temperature: <span id="tempv"></span> °C</label>
+    <input type="range" id="temp" min="20" max="95" value="25">
+  </div>
+  <p class="cap" id="cap"></p>
+  <div class="row" id="stepper">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+    <span class="read" id="count"></span>
+  </div>
+</div>
+<p class="note" id="foot"></p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", pol:"#6f86c0", grey:"#4a5578"};
+
+function seg(g, xa, xb, y, color, w) {
+  el("line", {x1:xa, y1:y, x2:xb, y2:y, stroke:color, "stroke-width":w || 5, "stroke-linecap":"round"}, g);
+}
+function polymerase(g, x, y, scale) {
+  // rounded blob; the notch is the active site
+  const s = scale || 1;
+  el("ellipse", {cx:x, cy:y - 3 * s, rx:14 * s, ry:10 * s, fill:C.pol}, g);
+  el("path", {d:`M${x - 4 * s} ${y + 7 * s} L${x} ${y + s} L${x + 4 * s} ${y + 7 * s} Z`, fill:"#111832"}, g);
+}
+function antibody(g, x, y, color) {
+  el("path", {d:`M${x} ${y} v-10 M${x} ${y - 10} l-7 -8 M${x} ${y - 10} l7 -8`, stroke:color, "stroke-width":3, fill:"none", "stroke-linecap":"round"}, g);
+}
+function squiggle(g, x, y, color) {
+  el("path", {d:`M${x} ${y} q4 -8 8 0 t8 0 t8 0`, fill:"none", stroke:color, "stroke-width":2.5, "stroke-linecap":"round"}, g);
+}
+function thermo(g, label, T) {
+  const col = T >= 90 ? "#ff8a5c" : T >= 50 ? C.amber : "#6ea8ff";
+  el("rect", {x:10, y:6, width:340, height:8, rx:4, fill:C.line}, g);
+  el("rect", {x:10, y:6, width:340 * Math.min(1, T / 95), height:8, rx:4, fill:col}, g);
+  txt(label, {x:180, y:30, "font-size":11, fill:col, "text-anchor":"middle"}, g);
+}
+
+// ---------- ramp race (p.19) ----------
+function lane(g, x0, hot, s) {
+  txt(hot ? "Hot-start Taq" : "Ordinary Taq", {x:x0 + 85, y:52, "font-size":11, fill:hot ? C.cyan : C.tx, "text-anchor":"middle"}, g);
+  if (s <= 1) {
+    seg(g, x0 + 10, x0 + 160, 120, C.cyan);
+    el("rect", {x:x0 + 110, y:113, width:44, height:14, rx:3, fill:"none", stroke:C.amber, "stroke-dasharray":"2 2"}, g);
+    txt("target site", {x:x0 + 132, y:142, "font-size":8, fill:C.amber, "text-anchor":"middle"}, g);
+    seg(g, x0 + 114, x0 + 150, 108, C.violet, 4);                  // correct primer
+    seg(g, x0 + 22, x0 + 58, 108, C.violet, 4);                    // primer on a near-match site
+    el("rect", {x:x0 + 18, y:102, width:44, height:12, rx:3, fill:"none", stroke:C.red}, g);
+    txt("wrong site", {x:x0 + 40, y:142, "font-size":8, fill:C.red, "text-anchor":"middle"}, g);
+    seg(g, x0 + 62, x0 + 96, 170, C.violet, 4);                    // primer dimer
+    seg(g, x0 + 80, x0 + 114, 178, C.violet, 4);
+    txt("primer dimer", {x:x0 + 88, y:196, "font-size":8, fill:C.red, "text-anchor":"middle"}, g);
+    polymerase(g, x0 + 90, 82);
+    if (hot) antibody(g, x0 + 90, 74, C.tx);
+    if (s === 1 && !hot) {
+      seg(g, x0 + 58, x0 + 100, 108, C.red, 4);                    // junk extension
+      seg(g, x0 + 114, x0 + 136, 178, C.red, 4);
+    }
+  } else if (s === 2) {
+    seg(g, x0 + 10, x0 + 160, 130, C.cyan);
+    if (!hot) { seg(g, x0 + 22, x0 + 100, 84, C.red, 4); txt("junk is now a template", {x:x0 + 85, y:72, "font-size":8, fill:C.red, "text-anchor":"middle"}, g); }
+    polymerase(g, x0 + 130, 170);
+    if (hot) { squiggle(g, x0 + 30, 170, C.grey); txt("antibody destroyed", {x:x0 + 46, y:192, "font-size":8, fill:C.dim, "text-anchor":"middle"}, g); }
+  } else if (s === 3) {
+    const tgt = hot ? 1 : 0.65, junk = hot ? 0 : 0.35;
+    el("rect", {x:x0 + 40, y:180 - 110 * tgt, width:36, height:110 * tgt, fill:C.amber}, g);
+    el("rect", {x:x0 + 96, y:180 - 110 * junk, width:36, height:Math.max(1, 110 * junk), fill:C.red}, g);
+    txt("target", {x:x0 + 58, y:196, "font-size":9, fill:C.amber, "text-anchor":"middle"}, g);
+    txt("junk", {x:x0 + 114, y:196, "font-size":9, fill:C.red, "text-anchor":"middle"}, g);
+  } else {
+    el("rect", {x:x0 + 55, y:64, width:60, height:132, rx:4, fill:"#0b1020", stroke:C.line}, g);
+    el("rect", {x:x0 + 62, y:96, width:46, height:6, rx:2, fill:C.amber}, g);
+    if (!hot) {
+      el("rect", {x:x0 + 62, y:132, width:46, height:5, rx:2, fill:C.red, opacity:.8}, g);
+      el("rect", {x:x0 + 62, y:178, width:46, height:6, rx:2, fill:C.red}, g);
+      txt("junk", {x:x0 + 120, y:137, "font-size":8, fill:C.red}, g);
+      txt("dimers", {x:x0 + 120, y:184, "font-size":8, fill:C.red}, g);
+    }
+    txt("target", {x:x0 + 120, y:101, "font-size":8, fill:C.amber}, g);
+  }
+}
+const RACE = [
+  ["22 °C — tube mixed", 22, "At room temperature primers stick loosely to near-matching sites and to each other (primer dimers)."],
+  ["ramping up, below 55 °C", 45, "Ordinary Taq already works on the way up and extends the mis-bound primers into junk (red). Hot-start Taq is still blocked."],
+  ["94 °C — first denaturation", 94, "The first heat step melts every pair apart and denatures the Taq antibody, so hot-start Taq switches on (p.19)."],
+  ["cycling 94 / 55 / 72 °C", 72, "Both tubes now copy the target. The ordinary tube also copies its junk in every cycle (amounts illustrative)."],
+  ["result on a gel", 4, "Ordinary Taq: extra bands from junk and primer dimers. Hot-start: the target band only."]
+];
+function drawRace(s, g) {
+  thermo(g, RACE[s][0], RACE[s][1]);
+  el("line", {x1:180, y1:40, x2:180, y2:205, stroke:C.line}, g);
+  lane(g, 5, false, s);
+  lane(g, 185, true, s);
+}
+
+// ---------- mechanisms (pp. 19–20) ----------
+function template(g, primerX, y) {
+  seg(g, 20, 340, y, C.cyan);
+  seg(g, primerX, primerX + 50, y - 12, C.violet, 4);
+}
+function drawAb(s, g) {
+  thermo(g, s ? "94 °C" : "room temperature", s ? 94 : 22);
+  template(g, 40, 150);
+  if (!s) {
+    polymerase(g, 120, 126, 1.3);
+    antibody(g, 120, 114, C.tx);
+    txt("antibody on the active site", {x:190, y:96, "font-size":10, fill:C.tx}, g);
+  } else {
+    seg(g, 90, 200, 138, C.amber, 4);
+    polymerase(g, 214, 128, 1.3);
+    squiggle(g, 60, 80, C.grey);
+    txt("antibody unfolded", {x:96, y:84, "font-size":10, fill:C.dim}, g);
+  }
+}
+function drawPrimer(s, g) {
+  thermo(g, s ? "after heat activation" : "room temperature", s ? 94 : 22);
+  template(g, 60, 150);
+  if (!s) {
+    txt("X", {x:116, y:142, "font-size":16, fill:C.red}, g);
+    txt("heat-removable group at the 3′ end", {x:130, y:120, "font-size":10, fill:C.red}, g);
+    polymerase(g, 240, 126, 1.3);
+    txt("can't extend", {x:240, y:96, "font-size":10, fill:C.dim, "text-anchor":"middle"}, g);
+  } else {
+    seg(g, 110, 230, 138, C.amber, 4);
+    polymerase(g, 244, 128, 1.3);
+    txt("X", {x:96, y:72, "font-size":16, fill:C.grey}, g);
+    txt("group removed", {x:116, y:72, "font-size":10, fill:C.dim}, g);
+  }
+}
+function dntp(g, x, y, blocked) {
+  el("circle", {cx:x, cy:y, r:5, fill:C.amber}, g);
+  if (blocked) el("polygon", {points:`${x + 6},${y + 2} ${x + 12},${y - 2} ${x + 15},${y + 4} ${x + 11},${y + 10} ${x + 5},${y + 8}`, fill:"none", stroke:C.red, "stroke-width":1.5}, g);
+}
+function drawDntp(s, g) {
+  thermo(g, s ? "95 °C" : "room temperature", s ? 95 : 22);
+  template(g, 40, 160);
+  const pts = [[60,70],[110,90],[170,64],[230,86],[290,66],[320,100],[140,116],[260,118]];
+  pts.forEach(([x, y]) => dntp(g, x, y, !s));
+  if (!s) {
+    polymerase(g, 104, 138, 1.3);
+    txt("THF group on each dNTP's 3′-O: can't be built in", {x:180, y:46, "font-size":10, fill:C.red, "text-anchor":"middle"}, g);
+  } else {
+    seg(g, 90, 210, 148, C.amber, 4);
+    polymerase(g, 224, 138, 1.3);
+    txt("THF groups gone: normal dNTPs", {x:180, y:46, "font-size":10, fill:C.dim, "text-anchor":"middle"}, g);
+  }
+}
+function drawApt(T, g) {
+  const bound = T < 55, released = T >= 60;
+  thermo(g, T + " °C", T);
+  // C-shaped polymerase
+  el("path", {d:"M150 70 a50 50 0 1 0 0 100 l0 -26 a24 24 0 1 1 0 -48 Z", fill:C.pol, opacity:.9}, g);
+  if (bound) {
+    el("path", {d:"M150 104 q12 -14 22 0 q10 14 22 0 q10 -12 18 2", fill:"none", stroke:C.violet, "stroke-width":4, "stroke-linecap":"round"}, g);
+    txt("aptamer in the cleft: inactive", {x:180, y:196, "font-size":10, fill:C.violet, "text-anchor":"middle"}, g);
+  } else {
+    el("path", {d:`M230 ${released ? 60 : 96} q20 10 30 30 q10 20 30 30 q20 8 40 0`, fill:"none", stroke:C.violet, "stroke-width":4, "stroke-linecap":"round", opacity:released ? 1 : .6}, g);
+    txt(released ? "aptamer released: active" : "switching (55–60 °C)", {x:180, y:196, "font-size":10, fill:released ? C.cyan : C.dim, "text-anchor":"middle"}, g);
+  }
+}
+const APT_CAP = T => T < 55 ? "Below 55 °C the aptamer sits in Taq's cleft and blocks it. Cool down after a run and it binds again: reversible (p.20)."
+  : T < 60 ? "Between 55 and 60 °C the aptamer is letting go."
+  : "Above 60 °C the aptamer unfolds and leaves; Taq is free to extend primers (p.20).";
+
+// ---------- annealing temperature (Background) ----------
+function drawAnneal(T, g) {
+  thermo(g, "annealing at " + T + " °C", T);
+  seg(g, 20, 250, 120, C.cyan);
+  const sites = [[40, "near-match", 48], [110, "near-match", 54], [190, "target", 68]];
+  const lane = [];
+  sites.forEach(([x, name, maxT], k) => {
+    const isTarget = k === 2;
+    el("rect", {x, y:113, width:44, height:14, rx:3, fill:"none", stroke:isTarget ? C.amber : C.red, "stroke-dasharray":"2 2"}, g);
+    txt(name, {x:x + 22, y:142, "font-size":8, fill:isTarget ? C.amber : C.red, "text-anchor":"middle"}, g);
+    const binds = T < maxT && (isTarget ? T < 68 : true);
+    if (binds) { seg(g, x + 4, x + 40, 106, C.violet, 4); lane.push({y:isTarget ? 90 : 120 + k * 22, faint:isTarget && T >= 64, col:isTarget ? C.amber : C.red}); }
+  });
+  el("rect", {x:280, y:56, width:56, height:140, rx:4, fill:"#0b1020", stroke:C.line}, g);
+  txt("gel", {x:308, y:50, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  lane.forEach(b => el("rect", {x:286, y:b.y, width:44, height:6, rx:2, fill:b.col, opacity:b.faint ? .35 : 1}, g));
+}
+function annealCap(T) {
+  if (T < 48) return "Too cold: primers also stick to near-matching sites, so extra wrong bands appear.";
+  if (T < 54) return "Still a little cold: one near-match site still binds and gives a wrong band.";
+  if (T < 64) return "Just right: primers stay only on their exact site. One clean band.";
+  if (T < 68) return "Getting hot: even the exact match lets go often, so the band gets faint.";
+  return "Too hot: primers can't stay on at all. No product.";
+}
+
+// ---------- framework ----------
+const TABS = {
+  race:  {n:5, draw:drawRace, caps:RACE.map(r => r[2]), foot:"Thermal profile and the antibody idea from L07 p.19. Junk amounts are illustrative. Not to scale."},
+  ab:    {n:2, draw:drawAb, caps:["An antibody sits on Taq's active site, so nothing is extended while the tube warms up.", "The first 94 °C step denatures the antibody and Taq is free to work (p.19)."], foot:"📎 L07 p.19"},
+  primer:{n:2, draw:drawPrimer, caps:["A heat-removable group (X) at the primer's 3′ end blocks extension (slide example: CleanAmp™ primers).", "Hot-start activation removes the group; the polymerase extends the primer (p.20)."], foot:"📎 L07 p.20"},
+  dntp:  {n:2, draw:drawDntp, caps:["Each dNTP carries a thermolabile THF group on its 3′-O, so the polymerase can't build it in.", "At 95 °C the THF group falls off: ordinary dNTPs, ordinary extension (p.20)."], foot:"📎 L07 p.20"},
+  apt:   {slider:true, draw:drawApt, cap:APT_CAP, foot:"Aptamer: a folded single strand of DNA that binds a target by shape. 📎 L07 p.20"},
+  anneal:{slider:true, draw:drawAnneal, cap:annealCap, foot:"Background (not on slides): annealing is set a few °C below the primers' melting temperature. The slides give 48–72 °C (p.13) and 55 °C (pp. 19, 30). Thresholds here are illustrative."}
+};
+let tab = "race", i = 0, timer = null;
+function render() {
+  const t = TABS[tab], g = $("stage");
+  g.innerHTML = "";
+  $("stepper").hidden = !!t.slider;
+  $("tempBox").hidden = !t.slider;
+  if (t.slider) {
+    const T = +$("temp").value;
+    $("tempv").textContent = T;
+    t.draw(T, g);
+    $("cap").textContent = t.cap(T);
+  } else {
+    t.draw(i, g);
+    $("cap").textContent = t.caps[i];
+    $("count").textContent = (i + 1) + " / " + t.n;
+  }
+  $("foot").textContent = t.foot;
+  $("foot").className = tab === "anneal" ? "note bg" : "note";
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+}
+function next() { if (i < TABS[tab].n - 1) { i++; render(); } else pause(); }
+function play() { if (i === TABS[tab].n - 1) i = -1; timer = setInterval(next, 2400); $("play").textContent = "⏸ Pause"; next(); }
+function pause() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+$("play").onclick = () => timer ? pause() : play();
+$("step").onclick = () => { pause(); next(); };
+$("reset").onclick = () => { pause(); i = 0; render(); };
+$("temp").oninput = render;
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => {
+  pause(); tab = b.dataset.tab; i = 0;
+  $("temp").value = tab === "anneal" ? 58 : 25;
+  render();
+});
+const want = new URLSearchParams(location.search).get("tab");
+if (TABS[want]) { tab = want; $("temp").value = tab === "anneal" ? 58 : 25; }
+if (RM) $("play").hidden = true;
+render();
+</script>
+</body>
+</html>

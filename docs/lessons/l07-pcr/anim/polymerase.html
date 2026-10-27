@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Taq vs Pfu</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 14px "IBM Plex Mono",monospace;color:var(--amber);margin:6px 2px 0}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+label{font-size:13px;color:var(--dim);display:block;margin-top:6px}
+input[type=range]{width:100%;height:40px;accent-color:var(--cyan)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>The polymerase: Taq vs Pfu</h1>
+<div class="row tabs" role="tablist">
+  <button data-tab="heat">Heat survival</button>
+  <button data-tab="fid">Fidelity</button>
+</div>
+
+<section id="heat" class="panel">
+  <div class="row" style="margin-top:0" aria-label="Denaturation temperature">
+    <button data-t="92.5">Taq 92.5 °C</button>
+    <button data-t="95">Taq 95 °C</button>
+    <button data-t="97.5">Taq 97.5 °C</button>
+    <button data-t="ecoli">E. coli pol</button>
+  </div>
+  <svg id="blobs" viewBox="0 0 360 70" role="img" aria-label="20 polymerase molecules, active or unfolded"></svg>
+  <label for="cyc">Cycles run: <span id="cycv"></span></label>
+  <input type="range" id="cyc" min="0" max="40" value="30">
+  <svg id="decay" viewBox="0 0 360 130" role="img" aria-label="Active polymerase versus cycles"></svg>
+  <p class="read" id="heatRead"></p>
+  <p class="cap" id="heatCap"></p>
+  <p class="note">Half-lives from L07 p.14: &gt; 2 h at 92.5 °C, 40 min at 95 °C, 9 min at 97.5 °C. Time at the denaturing temperature follows the p.30 program (5:00 + 0:30 per cycle). The exponential decay model is Background.</p>
+</section>
+
+<section id="fid" class="panel" hidden>
+  <label for="len">Product length: <span id="lenv"></span> bp</label>
+  <input type="range" id="len" min="100" max="5000" step="100" value="1000">
+  <label for="dbl">Template doublings: <span id="dblv"></span></label>
+  <input type="range" id="dbl" min="1" max="30" value="20">
+  <svg id="mols" viewBox="0 0 360 200" role="img" aria-label="20 product molecules per enzyme, with errors marked"></svg>
+  <p class="read" id="extRead"></p>
+  <p class="cap" id="fidCap"></p>
+  <p class="note">Error rates per base per doubling, L07 p.17 (Nucl. Acids Res. 1996): Pfu 1.3, Taq 8.0 (× 10⁻⁶). exo⁻ Pfu (proofreading removed) ≥ 25 × 10⁻⁶ from p.18. The % formula 1 − (1 − rate)^(length × doublings) is Background.</p>
+</section>
+
+<script>
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", pol:"#6f86c0", grey:"#4a5578"};
+
+// ---------- heat survival ----------
+const HALF = {"92.5":120, "95":40, "97.5":9};
+let temp = "95";
+const minutesAt = c => 5 + 0.5 * c;
+function activeFrac(t, c) { return t === "ecoli" ? 0 : Math.pow(0.5, minutesAt(c) / HALF[t]); }
+function blob(g, x, y, alive) {
+  if (alive) {
+    el("ellipse", {cx:x, cy:y - 2, rx:11, ry:8, fill:C.pol}, g);
+    el("path", {d:`M${x - 3} ${y + 6} L${x} ${y + 1} L${x + 3} ${y + 6} Z`, fill:"#111832"}, g);
+  }
+  else el("path", {d:`M${x - 11} ${y} q4 -9 8 0 t8 0 t7 -2`, fill:"none", stroke:C.grey, "stroke-width":2.5, "stroke-linecap":"round"}, g);
+}
+function renderHeat() {
+  const c = +$("cyc").value;
+  $("cycv").textContent = c;
+  const f = activeFrac(temp, c), alive = Math.round(20 * f);
+  const b = $("blobs"); b.innerHTML = "";
+  for (let k = 0; k < 20; k++) blob(b, 22 + (k % 10) * 35, 24 + Math.floor(k / 10) * 30, k < alive);
+  // decay chart: % active vs cycles for every option, the selected one bold
+  const d = $("decay"); d.innerHTML = "";
+  const X = cc => 40 + cc * 7.8, Y = p => 112 - p * 0.95;
+  for (const p of [0, 50, 100]) {
+    el("line", {x1:40, x2:352, y1:Y(p), y2:Y(p), stroke:C.line, "stroke-dasharray":"3 4"}, d);
+    txt(p + "%", {x:36, y:Y(p) + 3, "font-size":9, fill:C.dim, "text-anchor":"end"}, d);
+  }
+  for (const cc of [0, 10, 20, 30, 40]) txt(String(cc), {x:X(cc), y:126, "font-size":9, fill:C.dim, "text-anchor":"middle"}, d);
+  const col = {"92.5":C.cyan, "95":C.amber, "97.5":C.red};
+  for (const t of ["92.5", "95", "97.5"]) {
+    let path = "";
+    for (let cc = 0; cc <= 40; cc++) path += (cc ? " L" : "M") + X(cc) + " " + Y(100 * activeFrac(t, cc));
+    el("path", {d:path, fill:"none", stroke:col[t], "stroke-width":t === temp ? 3 : 1.2, opacity:t === temp ? 1 : .45}, d);
+    txt(t + "°", {x:X(40) - 2, y:Y(100 * activeFrac(t, 40)) - 4, "font-size":9, fill:col[t], "text-anchor":"end"}, d);
+  }
+  if (temp !== "ecoli") el("circle", {cx:X(c), cy:Y(100 * f), r:4, fill:C.tx}, d);
+  if (temp === "ecoli") {
+    $("heatRead").textContent = "E. coli polymerase: 0 % active after the first 94 °C step";
+    $("heatCap").textContent = "Not thermostable: the first denaturation unfolds it. Taq replaced it in PCR (p.14); before that, fresh enzyme had to be added after every cycle (Background).";
+  } else {
+    const pct = Math.round(100 * f);
+    $("heatRead").textContent = `${minutesAt(c).toFixed(1)} min at ${temp} °C → ${temp === "92.5" ? "≥ " : ""}${pct} % of Taq still active`;
+    $("heatCap").textContent = temp === "97.5"
+      ? "At 97.5 °C Taq's half-life is only 9 min, so a long run kills most of the enzyme."
+      : temp === "95" ? "At 95 °C Taq lasts 40 min (half-life): most of it survives a normal run."
+      : "At 92.5 °C Taq's half-life is over 2 h: it barely notices the run.";
+  }
+  document.querySelectorAll("[data-t]").forEach(x => x.classList.toggle("on", x.dataset.t === temp));
+}
+document.querySelectorAll("[data-t]").forEach(x => x.onclick = () => { temp = x.dataset.t; renderHeat(); });
+$("cyc").oninput = renderHeat;
+
+// ---------- fidelity ----------
+const ENZ = [
+  {name:"Pfu", rate:1.3e-6, color:C.cyan},
+  {name:"Taq", rate:8.0e-6, color:C.amber},
+  {name:"exo⁻ Pfu", rate:25e-6, color:C.violet}
+];
+// fixed pseudo-random positions so the picture doesn't jump between slider moves
+const POS = Array.from({length:60}, (_, k) => (k * 0.618034) % 1);
+function renderFid() {
+  const L = +$("len").value, dd = +$("dbl").value;
+  $("lenv").textContent = L; $("dblv").textContent = dd;
+  const s = $("mols"); s.innerHTML = "";
+  const lines = [];
+  ENZ.forEach((e, r) => {
+    const frac = 1 - Math.pow(1 - e.rate, L * dd);
+    const bad = Math.round(20 * frac);
+    const y0 = 16 + r * 62;
+    txt(e.name, {x:4, y:y0 + 4, "font-size":11, fill:e.color}, s);
+    txt(Math.round(100 * frac) + "% with ≥1 error", {x:356, y:y0 + 4, "font-size":10, fill:C.tx, "text-anchor":"end"}, s);
+    for (let k = 0; k < 20; k++) {
+      const x = 8 + k * 17.4, y = y0 + 12;
+      el("rect", {x, y, width:11, height:38, rx:2, fill:"none", stroke:e.color, "stroke-width":1.5, opacity:.8}, s);
+      if (k < bad) el("rect", {x:x - 1, y:y + 4 + POS[k + r * 20] * 28, width:13, height:4, fill:C.red}, s);
+    }
+    lines.push(`${e.name} ${Math.round(100 * frac)} %`);
+  });
+  $("extRead").textContent = `Extension needs about ${Math.max(1, Math.round(L / 100))} s at 72 °C (Taq: 1000 bp in < 10 s, p.14)`;
+  $("fidCap").textContent = `Copies of a ${L} bp product after ${dd} doublings carrying at least one error: ${lines.join(" · ")}. Pfu's proofreading exonuclease removes most mistakes.`;
+}
+$("len").oninput = renderFid;
+$("dbl").oninput = renderFid;
+
+// ---------- tabs ----------
+function showTab(t) {
+  for (const id of ["heat", "fid"]) $(id).hidden = id !== t;
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+}
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+const want = new URLSearchParams(location.search).get("tab");
+showTab(want === "fid" ? "fid" : "heat");
+renderHeat();
+renderFid();
+</script>
+</body>
+</html>

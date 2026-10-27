@@ -29,7 +29,7 @@ hide:
   <div class="bm-step bm-step--soon"><span class="n">L05 · Wk 5 · 10-06</span><span class="t">Optical biosensors</span><span class="d">fluorescence · SPR · smartphone</span><span class="s">not yet</span></div>
   <div class="bm-step bm-step--soon"><span class="n">— · Wk 6 · 10-13</span><span class="t">Nano-crystal systems</span><span class="d">no slides yet</span><span class="s">no slides</span></div>
   <div class="bm-step bm-step--soon"><span class="n">L06 · Wk 7 · 10-20</span><span class="t">Immunoassays</span><span class="d">ELISA · Western blot · on-chip</span><span class="s">not yet</span></div>
-  <div class="bm-step bm-step--soon"><span class="n">L07 · Wk 8 · 10-27</span><span class="t">PCR</span><span class="d">copying DNA with heat cycles</span><span class="s">not yet</span></div>
+  <a class="bm-step" href="lessons/l07-pcr/"><span class="n">L07 · Wk 8 · 10-27</span><span class="t">PCR</span><span class="d">copying DNA with heat cycles</span><span class="s">ready →</span></a>
   <div class="bm-step bm-step--soon"><span class="n">L08 · Wk 9 · 11-03</span><span class="t">Glucose biosensors</span><span class="d">GOx electrode → noninvasive</span><span class="s">not yet</span></div>
   <div class="bm-step bm-step--soon"><span class="n">L09 · Wk 9 · 11-03</span><span class="t">DNA sequencing</span><span class="d">Sanger → NGS → nanopore</span><span class="s">not yet</span></div>
 </nav>

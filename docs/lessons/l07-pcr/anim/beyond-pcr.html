@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Beyond classic PCR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 13px "IBM Plex Mono",monospace;color:var(--amber);margin:4px 2px 0}
+.bg{border-left:3px solid var(--violet);padding:4px 8px;color:var(--dim);font-size:13px;margin:0 0 8px}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+label{font-size:13px;color:var(--dim);display:block;margin-top:6px}
+input[type=range]{width:100%;height:40px;accent-color:var(--cyan)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>Beyond classic PCR</h1>
+<p class="bg"><b>Background — not on the slides.</b> L07 pp. 56–59 (qPCR, LAMP, RPA, iiPCR) were videos shown in class; the PDF has only their titles. This is a standard summary.</p>
+<div class="row tabs" role="tablist">
+  <button data-tab="qpcr">qPCR</button>
+  <button data-tab="lamp">LAMP</button>
+  <button data-tab="rpa">RPA</button>
+  <button data-tab="iipcr">iiPCR</button>
+</div>
+<div class="panel">
+  <svg id="stage" viewBox="0 0 360 200" role="img" aria-label="Diagram for the selected method"></svg>
+  <div id="qCtl" hidden>
+    <label for="n0">Starting copies: 10^<span id="n0v"></span></label>
+    <input type="range" id="n0" min="1" max="7" value="3">
+  </div>
+  <p class="read" id="read"></p>
+  <p class="cap" id="cap"></p>
+  <div class="row" id="stepper">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", pol:"#6f86c0", hot:"#ff8a5c", cool:"#6ea8ff"};
+function seg(g, xa, xb, y, color, w) { el("line", {x1:xa, y1:y, x2:xb, y2:y, stroke:color, "stroke-width":w || 5, "stroke-linecap":"round"}, g); }
+function polymerase(g, x, y) {
+  // rounded blob; the notch is the active site
+  el("ellipse", {cx:x, cy:y - 3, rx:14, ry:10, fill:C.pol}, g);
+  el("path", {d:`M${x - 4} ${y + 7} L${x} ${y + 1} L${x + 4} ${y + 7} Z`, fill:"#111832"}, g);
+}
+function flatTemp(g, T, label) {
+  el("line", {x1:20, x2:340, y1:30, y2:30, stroke:C.amber, "stroke-width":3}, g);
+  txt(label, {x:180, y:20, "font-size":11, fill:C.amber, "text-anchor":"middle"}, g);
+  txt("temperature stays at " + T + " — no cycling", {x:180, y:46, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+}
+
+// ---------- qPCR ----------
+const ct = n => 38.3 - 3.32 * n;                         // threshold cycle for 10^n starting copies
+const fluo = (c, n) => 1 / (1 + Math.exp(-(c - (ct(n) + 3.5)) / 1.6));
+function drawQ(g) {
+  const n = +$("n0").value;
+  $("n0v").textContent = n;
+  const X = c => 40 + c * 7.8, Y = f => 170 - f * 140;
+  el("line", {x1:40, x2:352, y1:170, y2:170, stroke:C.dim}, g);
+  el("line", {x1:40, x2:40, y1:20, y2:170, stroke:C.dim}, g);
+  for (const c of [0, 10, 20, 30, 40]) txt(String(c), {x:X(c), y:184, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  txt("cycle", {x:352, y:196, "font-size":9, fill:C.dim, "text-anchor":"end"}, g);
+  txt("fluorescence", {x:34, y:96, "font-size":9, fill:C.dim, "text-anchor":"middle", transform:"rotate(-90 34 96)"}, g);
+  el("line", {x1:40, x2:352, y1:Y(0.1), y2:Y(0.1), stroke:C.red, "stroke-dasharray":"4 3"}, g);
+  txt("threshold", {x:350, y:Y(0.1) - 4, "font-size":9, fill:C.red, "text-anchor":"end"}, g);
+  for (const m of [2, 4, 6, n]) {
+    let d = "";
+    for (let c = 0; c <= 40; c += 0.5) d += (c ? " L" : "M") + X(c).toFixed(1) + " " + Y(fluo(c, m)).toFixed(1);
+    el("path", {d, fill:"none", stroke:m === n ? C.cyan : C.dim, "stroke-width":m === n ? 3 : 1, opacity:m === n ? 1 : .5}, g);
+  }
+  el("circle", {cx:X(ct(n)), cy:Y(0.1), r:4, fill:C.tx}, g);
+  $("read").textContent = `Ct ≈ ${ct(n).toFixed(1)} for 10^${n} starting copies`;
+  $("cap").textContent = "qPCR (real-time PCR) reads fluorescence in every cycle. More starting template crosses the threshold sooner: 10× more ≈ 3.3 cycles earlier, so Ct measures how much was there. No gel needed.";
+}
+
+// ---------- LAMP ----------
+function drawLamp(s, g) {
+  flatTemp(g, "60–65 °C", "LAMP: one temperature");
+  if (s === 1) {
+    seg(g, 20, 340, 120, C.cyan);
+    seg(g, 20, 170, 106, C.amber);
+    el("path", {d:"M170 106 Q210 106 230 70 T300 40", fill:"none", stroke:C.cyan, "stroke-width":5, "stroke-linecap":"round", opacity:.7}, g);
+    polymerase(g, 176, 108);
+    txt("old strand peeled away", {x:250, y:94, "font-size":9, fill:C.dim}, g);
+  } else if (s === 2) {
+    const regs = [[30, "F3"], [80, "F2"], [130, "F1"], [200, "B1"], [250, "B2"], [300, "B3"]];
+    seg(g, 20, 340, 120, C.cyan);
+    regs.forEach(([x, name], k) => {
+      el("rect", {x, y:113, width:34, height:14, rx:3, fill:"none", stroke:[C.violet, C.amber, C.red][k % 3]}, g);
+      txt(name, {x:x + 17, y:146, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+    });
+    txt("4 primers (F3, B3, FIP, BIP) read 6 regions", {x:180, y:176, "font-size":10, fill:C.tx, "text-anchor":"middle"}, g);
+  } else if (s === 3) {
+    // dumbbell product with loops at both ends
+    seg(g, 90, 270, 108, C.amber);
+    seg(g, 90, 270, 124, C.cyan);
+    el("path", {d:"M90 108 a12 8 0 1 0 0 16", fill:"none", stroke:C.violet, "stroke-width":5}, g);
+    el("path", {d:"M270 108 a12 8 0 1 1 0 16", fill:"none", stroke:C.violet, "stroke-width":5}, g);
+    txt("loop", {x:66, y:150, "font-size":9, fill:C.violet}, g);
+    txt("loop", {x:276, y:150, "font-size":9, fill:C.violet}, g);
+    txt("loops = new starting points → copies pile up", {x:180, y:180, "font-size":10, fill:C.tx, "text-anchor":"middle"}, g);
+  } else {
+    txt("no 94 °C step: the polymerase opens the DNA itself", {x:180, y:120, "font-size":11, fill:C.tx, "text-anchor":"middle"}, g);
+  }
+}
+const LAMP = [
+  "LAMP (loop-mediated isothermal amplification) runs at one temperature, about 60–65 °C: no thermocycler needed.",
+  "A strand-displacing polymerase (e.g. Bst) peels the old strand away as it copies, so heat isn't needed to open the DNA.",
+  "4 primers (6 with optional loop primers) recognise 6 (or 8) regions of the target, which makes LAMP very specific.",
+  "The inner primers fold the ends into loops that seed new copying; results in under an hour, often read by eye (cloudiness or a colour dye)."
+];
+
+// ---------- RPA ----------
+function drawRpa(s, g) {
+  flatTemp(g, "37–42 °C", "RPA: body temperature");
+  seg(g, 20, 340, 112, C.cyan);
+  if (s < 2) seg(g, 20, 340, 126, C.cyan);
+  if (s === 1) {
+    seg(g, 120, 190, 76, C.violet, 4);
+    for (let x = 122; x <= 188; x += 9) el("circle", {cx:x, cy:70, r:4, fill:"#9aa7c7"}, g);
+    txt("recombinase-coated primer searching", {x:180, y:56, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  }
+  if (s >= 2) {
+    // primer invades the duplex; the displaced strand is held by single-strand binding proteins
+    seg(g, 120, 190, 126, C.violet, 4);
+    el("path", {d:"M110 126 Q155 175 200 126", fill:"none", stroke:C.cyan, "stroke-width":5}, g);
+    for (const x of [130, 155, 180]) el("circle", {cx:x, cy:x === 155 ? 151 : 144, r:4, fill:C.dim}, g);
+    seg(g, 20, 110, 126, C.cyan); seg(g, 200, 340, 126, C.cyan);
+    txt("single-strand binding proteins", {x:155, y:178, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  }
+  if (s === 3) { seg(g, 190, 300, 126, C.amber, 4); polymerase(g, 306, 128); }
+}
+const RPA = [
+  "RPA (recombinase polymerase amplification) works at a constant 37–42 °C.",
+  "A recombinase protein coats each primer and scans the double strand for the matching sequence.",
+  "At the match it pushes the primer into the duplex; single-strand binding proteins hold the displaced strand open.",
+  "A strand-displacing polymerase extends the primer. Repeating this amplifies the target in about 20–40 min."
+];
+
+// ---------- iiPCR ----------
+let phase = 0;
+function drawIi(s, g) {
+  // capillary heated at the bottom: hot at the bottom, cooler at the top
+  const x0 = 140, w = 80, top = 20, bot = 180;
+  const grad = el("linearGradient", {id:"tg", x1:0, y1:1, x2:0, y2:0}, el("defs", {}, g));
+  el("stop", {offset:"0", "stop-color":C.hot, "stop-opacity":".6"}, grad);
+  el("stop", {offset:"1", "stop-color":C.cool, "stop-opacity":".45"}, grad);
+  el("rect", {x:x0, y:top, width:w, height:bot - top, rx:12, fill:"url(#tg)", stroke:C.dim}, g);
+  el("rect", {x:x0 - 10, y:bot, width:w + 20, height:12, rx:3, fill:C.hot}, g);
+  txt("heater", {x:x0 - 14, y:bot + 10, "font-size":9, fill:C.hot, "text-anchor":"end"}, g);
+  txt("~95 °C: denature", {x:x0 + w + 12, y:bot - 8, "font-size":9, fill:C.hot}, g);
+  txt("~72 °C: extend", {x:x0 + w + 12, y:100, "font-size":9, fill:C.amber}, g);
+  txt("~60 °C: anneal", {x:x0 + w + 12, y:top + 14, "font-size":9, fill:C.cool}, g);
+  // convection loop: up one side, down the other
+  el("path", {d:`M${x0 + 24} ${bot - 10} L${x0 + 24} ${top + 16} L${x0 + 56} ${top + 16} L${x0 + 56} ${bot - 10} Z`, fill:"none", stroke:C.dim, "stroke-dasharray":"3 4"}, g);
+  const per = 2 * (bot - top - 26) + 64;
+  for (let k = 0; k < 6; k++) {
+    let d = ((phase + k / 6) % 1) * per, px, py;
+    const H = bot - top - 26;
+    if (d < H) { px = x0 + 24; py = bot - 10 - d; }
+    else if (d < H + 32) { px = x0 + 24 + (d - H); py = top + 16; }
+    else if (d < 2 * H + 32) { px = x0 + 56; py = top + 16 + (d - H - 32); }
+    else { px = x0 + 56 - (d - 2 * H - 32); py = bot - 10; }
+    el("circle", {cx:px, cy:py, r:4, fill:C.tx}, g);
+  }
+  txt("hot liquid rises", {x:x0 - 8, y:110, "font-size":9, fill:C.dim, "text-anchor":"end"}, g);
+}
+
+const TABS = {
+  qpcr: {slider:true, draw:drawQ},
+  lamp: {n:4, draw:drawLamp, caps:LAMP},
+  rpa: {n:4, draw:drawRpa, caps:RPA},
+  iipcr: {anim:true, draw:drawIi, cap:"iiPCR (insulated isothermal PCR): a capillary heated only from below. Hot liquid rises, cools at the top and sinks again (convection), so DNA riding the loop is denatured, annealed and extended over and over — cycling without a programmed thermocycler."}
+};
+let tab = "qpcr", i = 0, timer = null, raf = null;
+function render() {
+  const t = TABS[tab], g = $("stage");
+  g.innerHTML = "";
+  $("qCtl").hidden = !t.slider;
+  $("stepper").hidden = !!t.slider;
+  $("step").hidden = !!t.anim && !RM;   // iiPCR has no steps; under reduced motion Step nudges the loop
+  $("read").textContent = "";
+  if (t.slider) t.draw(g);
+  else if (t.anim) { t.draw(0, g); $("cap").textContent = t.cap; }
+  else { t.draw(i, g); $("cap").textContent = t.caps[i]; }
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+}
+function next() { if (i < TABS[tab].n - 1) { i++; render(); } else pause(); }
+function play() {
+  $("play").textContent = "⏸ Pause";
+  if (TABS[tab].anim) {
+    let last = performance.now();
+    const tick = now => { phase = (phase + (now - last) / 6000) % 1; last = now; render(); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+  } else { if (i === TABS[tab].n - 1) i = -1; timer = setInterval(next, 2600); next(); }
+}
+function pause() { clearInterval(timer); cancelAnimationFrame(raf); timer = raf = null; $("play").textContent = "▶ Play"; }
+$("play").onclick = () => (timer || raf) ? pause() : play();
+$("step").onclick = () => { pause(); if (TABS[tab].anim) { phase = (phase + 0.08) % 1; render(); } else next(); };
+$("reset").onclick = () => { pause(); i = 0; phase = 0; render(); };
+$("n0").oninput = render;
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { pause(); tab = b.dataset.tab; i = 0; render(); });
+const want = new URLSearchParams(location.search).get("tab");
+if (TABS[want]) tab = want;
+if (RM) $("play").hidden = true;
+render();
+</script>
+</body>
+</html>

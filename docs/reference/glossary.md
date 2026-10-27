@@ -8,4 +8,41 @@ search:
 
 # Glossary
 
-No lessons built yet — terms appear here as each lesson's vocabulary table is written.
+Every term from the Key-vocabulary tables of 1 lesson(s), merged and alphabetized. The lesson link jumps to where the term is taught.
+
+| Term | 中文 | Meaning | Lesson |
+|---|---|---|---|
+| Annealing | 黏合（退火） | Cooling so the primers pair with their target sites. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Aptamer | 適體 | Folded single strand of DNA or RNA that binds a target by shape. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Continuous-flow PCR | 連續流式 PCR | The sample flows through fixed temperature zones on a chip; each loop is one cycle. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Denaturation | 變性 | Heating to ~94–98 °C so the two strands separate. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| DNA ladder | DNA 分子量標記 | Mix of DNA pieces of known sizes run beside the samples. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| DNA polymerase | DNA 聚合酶 | Enzyme that builds a new DNA strand on a template, 5′→3′. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| dNTP | 去氧核糖核苷三磷酸 | Nucleotide building block (dATP, dCTP, dGTP, dTTP) added to the growing strand. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Emulsion PCR | 乳化 PCR | PCR inside water-in-oil droplets, often on beads. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Exonuclease | 核酸外切酶 | Enzyme activity that cuts nucleotides off the end of a strand. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Extension | 延伸 | The polymerase adds dNTPs to each primer, ~72 °C. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Fidelity | 保真度 | How rarely a polymerase makes copying errors. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Flow cytometry | 流式細胞術 | Reading particles one by one as they pass a laser. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Gel electrophoresis | 凝膠電泳 | Sorting DNA by size by pulling it through a gel with an electric field. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Hot-start PCR | 熱啟動 PCR | Polymerase, primer or dNTP blocked until the first heat step. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Isothermal amplification | 恆溫擴增 | Copying DNA at one constant temperature, e.g. LAMP, RPA (Background). | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Microdroplet | 微液滴 | Tiny water droplet in oil that works as its own reaction. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| microPCR | 微型 PCR | PCR on a ~1 µL drop over a tiny heater. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Multiplex PCR | 多重 PCR | Several primer pairs amplifying several targets in one tube. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Non-specific annealing | 非專一性黏合 | Primers binding to sites that only partly match (mispriming). | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| PCR (polymerase chain reaction) | 聚合酶連鎖反應 | Copies a chosen DNA region again and again by cycling the temperature. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Pfu polymerase | Pfu 聚合酶 | Thermostable polymerase with proofreading; higher fidelity than Taq. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Phosphodiester bond | 磷酸二酯鍵 | Covalent link between one nucleotide's 3′-O and the next one's phosphate. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Primer | 引子 | Short single strand that pairs with the template and gives the polymerase a 3′ end to start from. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Primer dimer | 引子二聚體 | Two primers pairing with each other and being extended into junk. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Proofreading | 校對 | Removing a wrongly added base before copying on. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Pyrophosphate (PPᵢ) | 焦磷酸 | The two phosphates released when a dNTP is built in. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Pyrophosphorolysis |  | Reverse of polymerisation: releases nucleotides from the end of a strand. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| qPCR | 即時定量 PCR | PCR read by fluorescence in every cycle (Background). | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Semi-conservative replication | 半保留複製 | Each new double helix keeps one parent strand. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| SMRT sequencing | 單分子即時定序 | PacBio method that watches one polymerase build in labelled bases. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Taq polymerase | Taq 聚合酶 | Thermostable polymerase from the hot-spring bacterium Thermus aquaticus. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Template | 模板 | The DNA strand being copied. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Thermocycler | 熱循環儀 | Instrument that heats and cools a metal block through a PCR program. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |
+| Thermostable | 耐熱 | Still working after repeated heating to ~95 °C. | [L07 — PCR](../lessons/l07-pcr/index.md#key-vocabulary) |

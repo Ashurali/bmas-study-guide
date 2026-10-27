@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Heat in place</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"IBM Plex Mono",monospace}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px}
+.cap{min-height:3em;margin:6px 2px 0;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.tabs{margin:0 0 8px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:40px;min-width:40px;padding:0 12px;background:transparent;color:var(--cyan);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+button.on{background:rgba(77,208,196,.15);border-color:var(--cyan)}
+.read{font:600 13px "IBM Plex Mono",monospace;color:var(--amber);margin:4px 2px 0}
+.note{color:var(--dim);font-size:12px;margin:4px 2px 0}
+.part{cursor:pointer}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<h1>The sample stays put: the heater cycles</h1>
+<div class="row tabs" role="tablist">
+  <button data-tab="cycler">Thermocycler</button>
+  <button data-tab="micro">microPCR</button>
+</div>
+<div class="panel">
+  <svg id="dev" viewBox="0 0 360 180" role="img" aria-label="Heating device"></svg>
+  <p class="cap" id="cap"></p>
+  <div class="row" aria-label="Sample volume">
+    <button data-vol="70">70 µL tube</button>
+    <button data-vol="1">1 µL drop</button>
+  </div>
+  <div class="row">
+    <button id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">↺ Reset</button>
+  </div>
+</div>
+<div class="panel">
+  <svg id="trace" viewBox="0 0 360 120" role="img" aria-label="Set, heater and sample temperature over time"></svg>
+  <p class="read" id="read"></p>
+  <p class="note">Dashed grey = programmed step, violet = heater, amber = sample.</p>
+</div>
+<p class="note" id="foot"></p>
+
+<script>
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(str, attrs, parent) { const t = el("text", attrs, parent); t.textContent = str; return t; }
+const C = {cyan:"#4dd0c4", amber:"#f2b13c", violet:"#a78bfa", red:"#ef6a6a", dim:"#8ea0c9", line:"#26304d", tx:"#e8eeff", hot:"#ff8a5c", cool:"#6ea8ff", panel:"#111832", metal:"#59627e"};
+const PROGRAM = [94, 55, 72], HOLD = 30;       // p.30: 0:30 at each step
+const TAU = {70:6, 1:0.8};                       // sample time constants (s), illustrative
+const RAMP = {cycler:4, micro:20};               // heater ramp rates (°C/s), illustrative
+const tempCol = T => T >= 85 ? C.hot : T >= 65 ? C.amber : T >= 45 ? C.cool : C.dim;
+
+let tab = "cycler", vol = 70, sim, timer = null, part = null;
+function resetSim() { sim = {t:0, block:25, sample:25, hist:[[0, 25, 25, 25]]}; }
+const setAt = t => PROGRAM[Math.floor(t / HOLD) % 3];
+function advance(dt) {
+  const end = sim.t + dt, h = 0.05, rate = RAMP[tab], tau = TAU[vol];
+  while (sim.t < end) {
+    const set = setAt(sim.t);
+    const d = set - sim.block;
+    sim.block += Math.sign(d) * Math.min(Math.abs(d), rate * h);
+    sim.sample += (sim.block - sim.sample) * h / tau;
+    sim.t += h;
+    if (Math.round(sim.t / h) % 4 === 0) sim.hist.push([sim.t, set, sim.block, sim.sample]);
+  }
+  const keep = sim.t - 130;
+  while (sim.hist.length && sim.hist[0][0] < keep) sim.hist.shift();
+}
+// time for the sample to come within 1 °C of the current step's set point
+function settleTime() {
+  const stepStart = Math.floor((sim.t - 0.01) / HOLD) * HOLD, set = setAt(stepStart + 0.01);
+  for (const [t, , , s] of sim.hist) if (t >= stepStart && Math.abs(s - set) <= 1) return t - stepStart;
+  return null;
+}
+
+function drawCycler(g) {
+  // metal block cross-section with wells, one tube holding the sample
+  const bc = tempCol(sim.block);
+  el("rect", {x:40, y:84, width:280, height:70, rx:6, fill:C.metal}, g);
+  el("rect", {x:40, y:154, width:280, height:12, rx:3, fill:bc, opacity:.85}, g);
+  txt("heater / cooler under the block", {x:180, y:178, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  for (const x of [80, 140, 220, 280]) el("path", {d:`M${x - 14} 84 L${x - 6} 140 L${x + 6} 140 L${x + 14} 84 Z`, fill:"#2f3650"}, g);
+  // tube in the middle well
+  const sc = tempCol(sim.sample);
+  el("path", {d:"M162 38 L198 38 L194 84 L186 140 L174 140 L166 84 Z", fill:"none", stroke:C.tx, "stroke-width":2}, g);
+  const lvl = vol === 70 ? 92 : 132;
+  el("path", {d:`M${166 + (lvl - 84) * 0.14} ${lvl} L${194 - (lvl - 84) * 0.14} ${lvl} L186 140 L174 140 Z`, fill:sc, opacity:.85}, g);
+  txt(vol + " µL", {x:212, y:lvl + 10, "font-size":10, fill:sc}, g);
+  txt("block " + sim.block.toFixed(0) + " °C", {x:46, y:76, "font-size":10, fill:bc}, g);
+  txt("sample " + sim.sample.toFixed(0) + " °C", {x:314, y:30, "font-size":10, fill:sc, "text-anchor":"end"}, g);
+}
+
+const PARTS = {
+  sample: "Sample: a 1 µL drop of PCR mix (p.42), 70 times less than the 70 µL in a thermocycler tube (p.30).",
+  oil: "Oil: a cap over the drop. (Background: it keeps the tiny drop from evaporating at 95 °C.)",
+  glass: "Glass: a thin cover glass that holds the drop right above the heater.",
+  ring: "Silicon ring: carries the heater and the temperature sensor just under the drop.",
+  heater: "Heater: built onto the silicon ring, so it heats only the small area under the drop.",
+  sensor: "Sensor: reads the temperature beside the heater. (Background: used for feedback control.)",
+  link: "Link: the ring hangs on a long, thin arm. (Background: little heat leaks away to the frame, so the ring heats and cools fast.)"
+};
+function hit(g, key, shape, attrs) {
+  const e = el(shape, Object.assign({class:"part", tabindex:0, role:"button", "aria-label":key}, attrs), g);
+  e.addEventListener("click", () => { part = key; render(); });
+  e.addEventListener("keydown", ev => { if (ev.key === "Enter") { part = key; render(); } });
+  if (part === key) e.setAttribute("stroke", "#ffffff"), e.setAttribute("stroke-width", 2.5);
+  return e;
+}
+function drawMicro(g) {
+  const sc = tempCol(sim.sample), hc = tempCol(sim.block);
+  // link arm to the left, ring cross-section in the middle
+  hit(g, "link", "rect", {x:6, y:118, width:110, height:10, fill:C.metal});
+  txt("link", {x:30, y:144, "font-size":9, fill:C.dim}, g);
+  hit(g, "ring", "rect", {x:116, y:104, width:30, height:44, fill:"#3c4560"});
+  hit(g, "ring", "rect", {x:214, y:104, width:30, height:44, fill:"#3c4560"});
+  txt("silicon ring", {x:180, y:172, "font-size":9, fill:C.dim, "text-anchor":"middle"}, g);
+  hit(g, "heater", "rect", {x:118, y:148, width:10, height:8, fill:hc});
+  hit(g, "heater", "rect", {x:232, y:148, width:10, height:8, fill:hc});
+  hit(g, "sensor", "rect", {x:134, y:148, width:10, height:8, fill:C.cyan});
+  hit(g, "sensor", "rect", {x:216, y:148, width:10, height:8, fill:C.cyan});
+  txt("heater", {x:98, y:166, "font-size":9, fill:hc}, g);
+  txt("sensor", {x:262, y:166, "font-size":9, fill:C.cyan, "text-anchor":"end"}, g);
+  hit(g, "glass", "rect", {x:100, y:96, width:160, height:8, fill:"#9fb3d9", opacity:.7});
+  txt("glass", {x:268, y:104, "font-size":9, fill:C.dim}, g);
+  hit(g, "oil", "path", {d:"M136 96 A44 44 0 0 1 224 96 Z", fill:"#e8eeff", opacity:.18});
+  txt("oil", {x:228, y:62, "font-size":9, fill:C.dim}, g);
+  hit(g, "sample", "circle", {cx:180, cy:80, r:vol === 70 ? 30 : 12, fill:sc, opacity:.9});
+  txt(vol + " µL", {x:180, y:vol === 70 ? 46 : 62, "font-size":10, fill:sc, "text-anchor":"middle"}, g);
+  txt("tap a part", {x:354, y:16, "font-size":9, fill:C.dim, "text-anchor":"end"}, g);
+}
+
+function drawTrace() {
+  const t = $("trace"); t.innerHTML = "";
+  const y = T => 108 - (T - 20) * 1.2, span = 120, t1 = Math.max(span, sim.t), t0 = t1 - span;
+  const X = tt => 36 + 318 * (tt - t0) / span;
+  for (const T of [94, 72, 55]) {
+    el("line", {x1:34, x2:356, y1:y(T), y2:y(T), stroke:C.line, "stroke-dasharray":"3 4"}, t);
+    txt(T + "°", {x:30, y:y(T) + 4, "font-size":10, fill:C.dim, "text-anchor":"end"}, t);
+  }
+  const line = (idx, color, extra) => {
+    let d = "";
+    for (const h of sim.hist) d += (d ? " L" : "M") + X(h[0]).toFixed(1) + " " + y(h[idx]).toFixed(1);
+    if (d) el("path", Object.assign({d, fill:"none", stroke:color, "stroke-width":2}, extra || {}), t);
+  };
+  line(1, C.dim, {"stroke-dasharray":"4 3", "stroke-width":1.5});
+  line(2, C.violet);
+  line(3, C.amber, {"stroke-width":2.5});
+  txt("time (s) →", {x:356, y:118, "font-size":9, fill:C.dim, "text-anchor":"end"}, t);
+}
+
+function render() {
+  const g = $("dev"); g.innerHTML = "";
+  if (tab === "cycler") drawCycler(g); else drawMicro(g);
+  drawTrace();
+  const st = settleTime();
+  const stepName = {94:"denature", 55:"anneal", 72:"extend"}[setAt(Math.max(0, sim.t - 0.01))];
+  $("read").textContent = sim.t < 1 ? "Press play or step." :
+    `Step at ${setAt(sim.t - 0.01)} °C (${stepName}): sample within 1 °C after ${st === null ? "> " + Math.round(sim.t % HOLD || HOLD) : st.toFixed(1)} s of the 30 s hold`;
+  if (part && tab === "micro") $("cap").textContent = PARTS[part];
+  else $("cap").textContent = tab === "cycler"
+    ? (vol === 70 ? "The whole metal block heats and cools every step; the 70 µL sample follows late (p.31 shows the lag)." : "Same block with a 1 µL sample: it follows the block almost at once.")
+    : (vol === 1 ? "microPCR: a 1 µL drop on a tiny heater. Little mass to heat, so the sample follows the program closely." : "Swap in 70 µL: the big drop lags behind the heater.");
+  $("foot").textContent = tab === "cycler"
+    ? "Program from L07 p.30: 94 °C 5:00, then 25 × (94 / 55 / 72 °C, 0:30 each), 72 °C 7:30, hold 4 °C — 50 min plus ramps. 96-well block and 70 µL tube: p.30; lag: p.31 (Diagnostics 2013). Ramp rates and time constants here are illustrative (Background)."
+    : "Structure from L07 p.42 (Mol. BioSyst. 2006): 1 µL sample, oil, glass, silicon ring with heater and sensor, link. Ramp rates and time constants are illustrative (Background).";
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll("[data-vol]").forEach(b => b.classList.toggle("on", +b.dataset.vol === vol));
+}
+function stepOnce() { advance(HOLD - (sim.t % HOLD) || HOLD); render(); }
+function play() {
+  $("play").textContent = "⏸ Pause";
+  timer = setInterval(() => { advance(0.6); render(); }, 50);
+}
+function pause() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+$("play").onclick = () => timer ? pause() : play();
+$("step").onclick = () => { pause(); stepOnce(); };
+$("reset").onclick = () => { pause(); resetSim(); render(); };
+document.querySelectorAll("[data-vol]").forEach(b => b.onclick = () => { pause(); vol = +b.dataset.vol; resetSim(); render(); });
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => {
+  pause(); tab = b.dataset.tab; vol = tab === "micro" ? 1 : 70; part = null; resetSim(); render();
+});
+const want = new URLSearchParams(location.search).get("tab");
+if (want === "micro") { tab = "micro"; vol = 1; }
+if (RM) $("play").hidden = true;
+resetSim();
+render();
+</script>
+</body>
+</html>

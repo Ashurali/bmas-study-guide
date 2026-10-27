@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>L07 quiz</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1020;--panel:#111832;--line:#26304d;--cyan:#4dd0c4;--amber:#f2b13c;--violet:#a78bfa;--red:#ef6a6a;--green:#7fd88f;--tx:#e8eeff;--dim:#8ea0c9}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0 auto;max-width:720px;padding:12px;background:var(--bg);color:var(--tx);font:15px/1.5 "IBM Plex Sans",sans-serif}
+h1{font:700 17px "Space Grotesk",sans-serif;margin:0 0 6px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px}
+.meta{font:600 12px "IBM Plex Mono",monospace;color:var(--dim)}
+.q{font-weight:600;margin:6px 0 10px}
+.fig svg,.fig img{display:block;width:100%;height:auto;max-width:480px;margin:0 auto 8px;border-radius:8px}
+.fig svg text{font-family:"IBM Plex Mono",monospace}
+.opts{display:flex;flex-direction:column;gap:6px}
+button{font:600 14px "IBM Plex Sans",sans-serif;min-height:44px;padding:8px 12px;background:transparent;color:var(--tx);border:1px solid var(--line);border-radius:8px;cursor:pointer;text-align:left}
+button.ok{border-color:var(--green);background:rgba(127,216,143,.14)}
+button.bad{border-color:var(--red);background:rgba(239,106,106,.14)}
+button.nav{color:var(--cyan);text-align:center}
+.why{margin:10px 2px 0;font-size:14px}
+.slide{color:var(--dim);font-size:12px;margin:4px 2px 0}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.score{font:700 28px "Space Grotesk",sans-serif;color:var(--amber)}
+</style>
+</head>
+<body>
+<h1>L07 · Check yourself</h1>
+<div class="panel" id="box"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const AI = "../../../assets/ai/";
+
+// ---------- drawings in this site's own style ----------
+const SVG_TRACE = (() => {
+  const y = T => 112 - T;
+  return `<svg viewBox="0 0 320 120" role="img" aria-label="Temperature trace of one cycle with one plateau highlighted">
+  ${[94, 72, 55].map(T => `<line x1="40" x2="312" y1="${y(T)}" y2="${y(T)}" stroke="#26304d" stroke-dasharray="3 4"/><text x="34" y="${y(T) + 4}" font-size="10" fill="#8ea0c9" text-anchor="end">${T}°</text>`).join("")}
+  <path d="M44 ${y(25)} L60 ${y(94)} L110 ${y(94)} L124 ${y(55)} L174 ${y(55)} L184 ${y(72)} L234 ${y(72)} L246 ${y(94)} L296 ${y(94)}" fill="none" stroke="#4dd0c4" stroke-width="2.5"/>
+  <path d="M124 ${y(55)} L174 ${y(55)}" stroke="#f2b13c" stroke-width="7"/>
+  <text x="149" y="${y(55) + 18}" font-size="11" fill="#f2b13c" text-anchor="middle">?</text></svg>`;
+})();
+const SVG_TREE = (() => {
+  let rows = [[["o", "o"]]];
+  for (let r = 1; r <= 3; r++) rows.push(rows[r - 1].flatMap(d => [[d[0], "n"], [d[1], "n"]]));
+  let s = `<svg viewBox="0 0 320 120" role="img" aria-label="Family tree of double strands over three cycles">`;
+  rows.forEach((row, r) => row.forEach((d, j) => {
+    const sp = 300 / row.length, cx = 10 + sp * (j + 0.5), yy = 8 + r * 28;
+    s += `<rect x="${cx - 5}" y="${yy}" width="4" height="20" rx="1" fill="${d[0] === "o" ? "#4dd0c4" : "#f2b13c"}"/><rect x="${cx + 1}" y="${yy}" width="4" height="20" rx="1" fill="${d[1] === "o" ? "#4dd0c4" : "#f2b13c"}"/>`;
+  }));
+  return s + `</svg>`;
+})();
+const SVG_PROOF = `<svg viewBox="0 0 320 150" role="img" aria-label="Polymerase with a mispaired base moved into a second site">
+  <ellipse cx="160" cy="75" rx="140" ry="62" fill="#6f86c0" opacity=".25" stroke="#6f86c0"/>
+  <circle cx="225" cy="70" r="20" fill="none" stroke="#f2b13c" stroke-dasharray="3 3"/>
+  <circle cx="120" cy="115" r="20" fill="none" stroke="#ef6a6a" stroke-dasharray="3 3"/>
+  <line x1="20" y1="88" x2="300" y2="88" stroke="#4dd0c4" stroke-width="5" stroke-linecap="round"/>
+  <line x1="20" y1="76" x2="160" y2="76" stroke="#f2b13c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M160 76 Q150 104 130 112" stroke="#f2b13c" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <rect x="118" y="108" width="11" height="11" rx="2" fill="#ef6a6a"/>
+  <text x="225" y="40" font-size="10" fill="#f2b13c" text-anchor="middle">site 1</text>
+  <text x="120" y="146" font-size="10" fill="#ef6a6a" text-anchor="middle">site 2</text></svg>`;
+const SVG_CHEM = `<svg viewBox="0 0 320 150" role="img" aria-label="End of a growing strand and an incoming nucleotide with three phosphates">
+  <polygon points="80,58 92,66 88,80 72,80 68,66" fill="none" stroke="#f2b13c" stroke-width="2"/>
+  <text x="40" y="70" font-size="10" fill="#f2b13c">strand</text>
+  <line x1="90" y1="78" x2="100" y2="92" stroke="#f2b13c" stroke-width="2"/><text x="98" y="104" font-size="12" fill="#ef6a6a">O–H</text>
+  <polygon points="240,88 252,96 248,110 232,110 228,96" fill="none" stroke="#a78bfa" stroke-width="2"/>
+  <line x1="230" y1="90" x2="214" y2="72" stroke="#a78bfa" stroke-width="2"/>
+  ${[["α", 64], ["β", 38], ["γ", 12]].map(([l, yy]) => `<circle cx="206" cy="${yy}" r="10" fill="#111832" stroke="#a78bfa" stroke-width="2"/><text x="206" y="${yy + 4}" font-size="11" fill="#a78bfa" text-anchor="middle">P</text><text x="220" y="${yy + 4}" font-size="10" fill="#a78bfa">${l}</text>`).join("")}
+  <path d="M130 96 Q180 96 196 70" fill="none" stroke="#ef6a6a" stroke-width="2"/><path d="M193 76 L197 68 L201 77" fill="#ef6a6a"/>
+  <text x="250" y="132" font-size="10" fill="#a78bfa">incoming dNTP</text></svg>`;
+const SVG_APT = `<svg viewBox="0 0 320 130" role="img" aria-label="A polymerase holding a folded strand at low temperature and releasing it at high temperature">
+  <path d="M70 20 a42 42 0 1 0 0 84 l0 -22 a20 20 0 1 1 0 -40 Z" fill="#6f86c0"/>
+  <path d="M70 62 q10 -12 18 0 q8 12 18 0" fill="none" stroke="#a78bfa" stroke-width="4" stroke-linecap="round"/>
+  <text x="60" y="124" font-size="11" fill="#6ea8ff" text-anchor="middle">below 55 °C</text>
+  <path d="M230 20 a42 42 0 1 0 0 84 l0 -22 a20 20 0 1 1 0 -40 Z" fill="#6f86c0"/>
+  <path d="M262 24 q14 8 20 22 q6 14 22 18" fill="none" stroke="#a78bfa" stroke-width="4" stroke-linecap="round"/>
+  <text x="240" y="124" font-size="11" fill="#ff8a5c" text-anchor="middle">above 60 °C</text>
+  <text x="160" y="66" font-size="16" fill="#8ea0c9" text-anchor="middle">⇄</text></svg>`;
+const SVG_GEL = `<svg viewBox="0 0 320 170" role="img" aria-label="Gel with a ladder lane and three sample bands A, B and C">
+  <rect x="40" y="8" width="240" height="6" rx="2" fill="#2a2f3f"/><text x="30" y="14" font-size="11" fill="#8ea0c9">−</text>
+  <rect x="40" y="156" width="240" height="6" rx="2" fill="#ef6a6a"/><text x="28" y="163" font-size="11" fill="#ef6a6a">+</text>
+  <rect x="60" y="20" width="200" height="130" rx="6" fill="#1a2340" stroke="#26304d"/>
+  ${[40, 56, 70, 86, 104, 126].map(yy => `<rect x="82" y="${yy}" width="34" height="5" rx="2" fill="#8ea0c9"/>`).join("")}
+  <rect x="160" y="50" width="40" height="6" rx="2" fill="#f2b13c"/><text x="210" y="56" font-size="11" fill="#f2b13c">A</text>
+  <rect x="160" y="88" width="40" height="6" rx="2" fill="#f2b13c"/><text x="210" y="94" font-size="11" fill="#f2b13c">B</text>
+  <rect x="160" y="128" width="40" height="6" rx="2" fill="#f2b13c"/><text x="210" y="134" font-size="11" fill="#f2b13c">C</text>
+  <text x="99" y="32" font-size="9" fill="#8ea0c9" text-anchor="middle">ladder</text></svg>`;
+
+// ---------- questions: {q, options, answer (index into options), why, slide, svg?, img?, alt?} ----------
+const QUIZ = [
+  {svg:SVG_TRACE, q:"This is one cycle of the p.30 program. Which step is the highlighted plateau?",
+   options:["Denaturation", "Annealing", "Extension", "Final hold"], answer:1,
+   why:"55 °C is cool enough for the primers to pair with their sites. Strands separate at 94 °C and the polymerase extends at 72 °C.", slide:"L07 pp. 13, 30"},
+  {svg:SVG_TREE, q:"The tree shows double strands over three cycles (cyan = original strand, amber = new). After n cycles, how many double strands come from one starting molecule, and how many still hold an original strand?",
+   options:["2ⁿ, and only 2 of them", "2ⁿ, and all of them", "n², and only 2 of them", "2n, and n of them"], answer:0,
+   why:"Every cycle doubles the count. The two original strands are never destroyed; they just end up in two different double strands.", slide:"L07 p.6"},
+  {q:"Which of these is NOT one of the five requirements for PCR?",
+   options:["Two specific primers", "A thermostable DNA polymerase", "DNA ligase", "dNTPs"], answer:2,
+   why:"The five: two primers, a thermostable polymerase, dNTPs, a DNA template and sequential temperature cycles. Ligase joins DNA ends; PCR doesn't use it.", slide:"L07 p.8"},
+  {q:"Why did Taq polymerase replace the E. coli polymerase in PCR?",
+   options:["It survives the ~95 °C denaturation step", "It proofreads its mistakes", "It needs no primers", "It works best at room temperature"], answer:0,
+   why:"Taq comes from Thermus aquaticus, a hot-spring bacterium (Chien et al., 1976). It withstands the protein-denaturing heat of PCR.", slide:"L07 p.14"},
+  {q:"Taq's half-life at 95 °C is about…",
+   options:["More than 2 hours", "40 minutes", "9 minutes", "10 seconds"], answer:1,
+   why:"> 2 h at 92.5 °C, 40 min at 95 °C, 9 min at 97.5 °C. (Under 10 s is how long it needs to copy ~1000 bp at 72 °C.)", slide:"L07 p.14"},
+  {q:"Pfu makes fewer copying errors than Taq (1.3 vs 8.0 × 10⁻⁶ per base per doubling). Why?",
+   options:["Pfu is faster", "Pfu has a proofreading exonuclease activity", "Pfu works at a lower temperature", "Pfu uses RNA primers"], answer:1,
+   why:"The p.15 table credits Pfu with an extra exonuclease activity: it cuts off a wrong base so the right one can go in (p.7). Without it (exo⁻ Pfu) the error rate is many times higher (p.18).", slide:"L07 pp. 7, 15, 17–18"},
+  {svg:SVG_PROOF, q:"What is the polymerase doing in this drawing?",
+   options:["Adding a primer", "Separating the two strands", "Proofreading: moving a mispaired base to the exonuclease site to cut it off", "Joining two DNA fragments"], answer:2,
+   why:"A wrong base (red) at the 3′ end moves from the polymerase site (site 1) to the exonuclease site (site 2), is cut off, and the correct base is added.", slide:"L07 p.7"},
+  {svg:SVG_CHEM, q:"How does a nucleotide join the growing strand?",
+   options:["The strand's 3′-OH attacks the dNTP's α-phosphate; pyrophosphate (β + γ) leaves", "The dNTP's 3′-OH attacks the strand's 5′-phosphate; water leaves", "The strand's 5′-OH attacks the γ-phosphate; the base leaves", "The two bases bond to each other; a phosphate leaves"], answer:0,
+   why:"A phosphodiester bond forms between the 3′-O and the α-phosphate, and PPᵢ leaves. The new nucleotide carries the next free 3′-OH, so strands grow 5′→3′.", slide:"L07 p.7"},
+  {q:"What problem does a hot-start PCR system prevent?",
+   options:["Taq losing activity at 95 °C", "Mispriming and primer dimers before the first heating step", "The sample evaporating", "Errors during extension"], answer:1,
+   why:"While the tube warms up, primers can stick to wrong sites or to each other. Hot-start keeps the polymerase (or primers, or dNTPs) blocked until the first high-temperature step.", slide:"L07 pp. 19–20"},
+  {svg:SVG_APT, q:"A strand sits in the polymerase below 55 °C and lets go above 60 °C. Which hot-start type is this, and is it reversible?",
+   options:["Antibody-blocked polymerase — irreversible", "Aptamer-blocked polymerase — reversible", "Blocked primer — irreversible", "Blocked dNTP — reversible"], answer:1,
+   why:"An aptamer (a folded DNA strand) blocks Taq; it releases above 60 °C and binds again below 55 °C.", slide:"L07 p.20"},
+  {q:"Your template is GC-rich and folds into secondary structures. Which additive helps, and which detergent must you avoid?",
+   options:["BSA; avoid Tween 20", "Glycerol; avoid Triton X", "DMSO (2–5 %); avoid SDS", "Betaine; avoid DMSO"], answer:2,
+   why:"DMSO keeps GC-rich strands from folding (inhibitory at high %). Non-ionic detergents are fine, but 0.01 % SDS cuts Taq activity to about 10 %.", slide:"L07 p.21"},
+  {q:"Moving one tube by hand between water baths (95 °C 5 min, 55 °C 3 min, 72 °C 5 min), how long did 35 cycles take?",
+   options:["About 30 minutes", "About 50 minutes", "About 2 hours", "About 8 hours"], answer:3,
+   why:"35 × 13 min = 455 min ≈ 8 h. The p.30 thermocycler program takes about 50 min plus ramps.", slide:"L07 pp. 26, 30"},
+  {img:AI + "l07-quiz-flow-chip.webp", alt:"Textbook-style drawing of a chip crossed by red, orange and blue bands with one winding channel", q:"Which PCR system does this drawing show, and what sets the number of cycles?",
+   options:["Rotary PCR — the motor speed", "Continuous-flow PCR chip — the number of loops through the zones", "A thermocycler block — the program", "Droplet PCR — the droplet size"], answer:1,
+   why:"The sample flows through fixed hot, medium and cool zones; every loop is one cycle (95 / 72 / 55 °C on p.38). The sample moves, not the heater.", slide:"L07 pp. 37–38"},
+  {svg:SVG_GEL, q:"Which band is the smallest PCR product?",
+   options:["A", "B", "C", "They are all the same size"], answer:2,
+   why:"DNA moves toward the + electrode and short pieces move fastest, so the band farthest from the wells (C) is the smallest.", slide:"L07 p.33"},
+  {q:"In multiplex PCR, four primer pairs share one tube. Why must their products have different lengths?",
+   options:["So each product shows up as its own band", "So the primers can't bind each other", "So the polymerase can tell them apart", "So each needs a different temperature"], answer:0,
+   why:"All products are sorted on the same gel lane; products of equal length would land on the same spot.", slide:"L07 p.35"},
+  {img:AI + "l07-quiz-emulsion.webp", alt:"Textbook-style drawing of droplets in oil, some holding a bead covered in short strands", q:"Which technique is this, and why should a droplet hold at most one template?",
+   options:["Hot-start PCR — so primers can't misprime", "Gel electrophoresis — so bands don't overlap", "Emulsion (droplet) PCR on beads — so each bead ends up carrying copies of one template only", "qPCR — so fluorescence can be read"], answer:2,
+   why:"Each droplet is its own tiny PCR. A bead that shares a droplet with one template gets covered in copies of that one sequence; probes then tell the beads apart.", slide:"L07 pp. 45–46"},
+  {img:AI + "l07-quiz-anneal.webp", alt:"Textbook-style drawing of two separated DNA strands, each with a short piece paired near one end", q:"Which PCR step does this drawing show?",
+   options:["Denaturation", "Annealing", "Extension", "Final hold"], answer:1,
+   why:"Two separated strands, each with a short primer paired near one end, and nothing extended yet: the primers have just annealed.", slide:"L07 pp. 9, 13"},
+  {q:"In PacBio SMRT sequencing, what does one fluorescence pulse mean?",
+   options:["One PCR cycle has finished", "One DNA molecule has left the well", "One primer has bound", "One base is being built in by a single polymerase, in real time"], answer:3,
+   why:"A polymerase fixed at the bottom of a well incorporates labelled nucleotides; each incorporation gives a flash in that base's colour.", slide:"L07 p.53"}
+];
+
+let order = QUIZ.map((_, k) => k), pos = 0, missed = [], answered = false;
+function shuffled(n) {
+  const a = Array.from({length:n}, (_, k) => k);
+  for (let k = n - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; }
+  return a;
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+function showQuestion() {
+  const box = $("box"); box.innerHTML = "";
+  const Q = QUIZ[order[pos]];
+  answered = false;
+  box.appendChild(el("div", "meta", `Question ${pos + 1} / ${order.length}`));
+  if (Q.svg || Q.img) {
+    const fig = el("div", "fig");
+    if (Q.svg) fig.innerHTML = Q.svg;
+    else { const im = el("img"); im.src = Q.img; im.alt = Q.alt; im.width = 1200; im.height = 900; fig.appendChild(im); }
+    box.appendChild(fig);
+  }
+  box.appendChild(el("p", "q", Q.q));
+  const opts = el("div", "opts");
+  for (const k of shuffled(Q.options.length)) {
+    const b = el("button", "", Q.options[k]);
+    b.dataset.k = k;
+    b.onclick = () => answer(k, opts, Q);
+    opts.appendChild(b);
+  }
+  box.appendChild(opts);
+}
+function answer(k, opts, Q) {
+  if (answered) return;
+  answered = true;
+  const right = k === Q.answer;
+  if (!right) missed.push(order[pos]);
+  opts.querySelectorAll("button").forEach(b => {
+    if (+b.dataset.k === Q.answer) b.classList.add("ok");
+    else if (+b.dataset.k === k) b.classList.add("bad");
+  });
+  const box = $("box");
+  box.appendChild(el("p", "why", (right ? "✓ Right. " : "✗ Not quite. ") + Q.why));
+  box.appendChild(el("p", "slide", "📎 " + Q.slide));
+  const row = el("div", "row");
+  const nx = el("button", "nav", pos === order.length - 1 ? "See score" : "Next →");
+  nx.onclick = () => { pos++; if (pos < order.length) showQuestion(); else showScore(); };
+  row.appendChild(nx);
+  box.appendChild(row);
+  nx.focus({preventScroll:true});
+}
+function showScore() {
+  const box = $("box"); box.innerHTML = "";
+  box.appendChild(el("div", "meta", "Done"));
+  box.appendChild(el("div", "score", `${order.length - missed.length} / ${order.length}`));
+  box.appendChild(el("p", "", missed.length ? `You missed ${missed.length}.` : "All right — well done."));
+  const row = el("div", "row");
+  if (missed.length) {
+    const r = el("button", "nav", `Retry the ${missed.length} I missed`);
+    r.onclick = () => { order = missed; missed = []; pos = 0; showQuestion(); };
+    row.appendChild(r);
+  }
+  const s = el("button", "nav", "Start over");
+  s.onclick = () => { order = QUIZ.map((_, k) => k); missed = []; pos = 0; showQuestion(); };
+  row.appendChild(s);
+  box.appendChild(row);
+}
+showQuestion();
+</script>
+</body>
+</html>
